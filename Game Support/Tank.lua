@@ -1,5 +1,5 @@
 --!optimize 2
-local Module = loadstring(game:HttpGet("https://raw.githubusercontent.com/Jimenth/Severe/refs/heads/main/Epstein%20Highlighter.lua"))();
+local Module = loadstring(game:HttpGet("https://raw.githubusercontent.com/Jimenth/Severe/refs/heads/main/Modules/Highlight.lua"))();
 task.wait(1)
 
 local Vehicles = game:GetService("Workspace"):FindFirstChild("Vehicles")
