@@ -1,6 +1,8 @@
 local Added = {}
 local Workspace = game:GetService("Workspace")
 local Closest
+local State = false
+local Excluded = nil
 local PlaceID = game.PlaceId
 
 local Places = {
@@ -31,9 +33,9 @@ local function GetClosestPlayer()
 
     for _, Model in pairs(Workspace:GetChildren()) do
         if Model.ClassName == "Model" and Model.Name == "Male" and IsPlayerModel(Model) then
-            local Root = Model:FindFirstChild("Root")
-            if Root then
-                local Distance = vector.magnitude(Root.Position - CameraPosition)
+            local HumanoidRootPart = Model:FindFirstChild("Root")
+            if HumanoidRootPart then
+                local Distance = vector.magnitude(HumanoidRootPart.Position - CameraPosition)
                 if Distance < ClosestDistance then
                     ClosestDistance = Distance
                     ClosestModel = Model
@@ -159,25 +161,44 @@ end
 task.spawn(function()
     while true do
         task.wait(0.5)
-        local New = GetClosestPlayer()
+        
+        local HasWorldModel = CheckWorldModel()
+        local New = nil
+        
+        if not HasWorldModel then
+            New = GetClosestPlayer()
+        end
         
         if PlaceID == Places["Openworld"] then
-            State = false
-            Excluded = nil
-            Closest = nil
-        elseif PlaceID == Places["2V2"] or PlaceID == Places["5V5"] or PlaceID == Places["Ranked"] then
-            State = false
-            Excluded = nil
-            Closest = New
-        else
-            if CheckWorldModel() then
+            if HasWorldModel then
                 State = false
                 Excluded = nil
             else
                 State = true
                 Excluded = New
             end
-            
+            Closest = New
+        elseif PlaceID == Places["2V2"] or PlaceID == Places["5V5"] or PlaceID == Places["Ranked"] then
+            State = false
+            Excluded = nil
+            Closest = New
+        elseif PlaceID == Places["Zombies"] then
+            if HasWorldModel then
+                State = false
+                Excluded = nil
+            else
+                State = true
+                Excluded = New
+            end
+            Closest = New
+        else
+            if HasWorldModel then
+                State = true
+                Excluded = New
+            else
+                State = false
+                Excluded = nil
+            end
             Closest = New
         end
     end
@@ -194,13 +215,17 @@ local function Update()
                 local Key = tostring(Object)
                 if not Key then return end
                 
-                if PlaceID == Places["Openworld"] and Object.Name == "Male" and IsPlayerModel(Object) then
-                    return
-                end
-                
                 local Parts = GetBodyParts(Object)
 
                 if Parts and Parts.Head and Parts.HumanoidRootPart then
+                    if State and Excluded and Object == Excluded then
+                        if PlaceID == Places["Zombies"] and IsPlayerModel(Object) then
+                            return
+                        elseif PlaceID ~= Places["Zombies"] then
+                            return
+                        end
+                    end
+
                     if not Added[Key] then
                         local Success2, ID, Data = pcall(function()
                             return PlayerData(Object, Parts)
@@ -234,12 +259,11 @@ local function Update()
             local Success, HumanoidRootPart = pcall(function() 
                 return Model:FindFirstChild("Root") 
             end)
-            
+        
             if not Success then HumanoidRootPart = nil end
-            
-            if not HumanoidRootPart or not Seen[Key] then
-                pcall(function() remove_model_data(Key) end)
-                
+        
+            if not HumanoidRootPart or not Seen[Key] or not Model.Parent or (HumanoidRootPart and not HumanoidRootPart.Parent) then
+                remove_model_data(Key)
                 Added[Key] = nil
             end
         end)
@@ -373,9 +397,12 @@ local function LocalPlayerData()
     override_local_data(Data)
 end
 
-RunService.PostLocal:Connect(function()
-    Update()
+task.spawn(function()
+    while true do
+        task.wait(1 / 5)
+        Update()
     
-    local ID, Data = LocalPlayerData()
-    if ID and Data then override_local_data(Data) end
+        local ID, Data = LocalPlayerData()
+        if ID and Data then override_local_data(Data) end
+    end
 end)
