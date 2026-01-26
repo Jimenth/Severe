@@ -189,18 +189,18 @@ local function GetPartsFromTarget(Target)
     if typeof(Target) == "Instance" then
         if Target.ClassName == "Model" then
             for _, Child in ipairs(Target:GetChildren()) do
-                if (Child.ClassName == "Part" or Child.ClassName == "MeshPart") and Child.Transparency < 1 then
+                if (Child.ClassName == "Part" or Child.ClassName == "MeshPart" or Child.ClassName == "UnionOperation") and Child.Transparency < 1 then
                     table.insert(Parts, Child)
                 end
             end
-        elseif Target.ClassName == "Part" or Target.ClassName == "MeshPart" then
+        elseif Target.ClassName == "Part" or Target.ClassName == "MeshPart" or Target.ClassName == "UnionOperation" then
             if Target.Transparency < 1 then
                 table.insert(Parts, Target)
             end
         end
     elseif type(Target) == "table" then
         for _, Part in ipairs(Target) do
-            if typeof(Part) == "Instance" and (Part.ClassName == "Part" or Part.ClassName == "MeshPart") and Part.Transparency < 1 then
+            if typeof(Part) == "Instance" and (Part.ClassName == "Part" or Part.ClassName == "MeshPart" or Part.ClassName == "UnionOperation") and Part.Transparency < 1 then
                 table.insert(Parts, Part)
             end
         end
