@@ -17,17 +17,6 @@ local Stored = {
     Drones = {}
 }
 
-local function GetTeam(Engine)
-    if not Engine then return nil end
-
-    local Team = Engine:GetAttribute("Team")
-    if typeof(Team) == "string" then
-        return Team
-    end
-
-    return "Unknown Team"
-end
-
 local function GetPlayerTeam(Name)
     if typeof(Name) ~= "string" then return nil end
 
@@ -40,6 +29,17 @@ local function GetPlayerTeam(Name)
     else
         return "Unknown Team"
     end
+end
+
+local function GetVehicleTeam(Vehicle)
+    if not Vehicle then return nil end
+
+    local OwnerName = Vehicle:GetAttribute("Requester")
+    if typeof(OwnerName) ~= "string" then
+        return nil
+    end
+
+    return GetPlayerTeam(OwnerName)
 end
 
 local function IsAmmo(Name)
@@ -147,7 +147,7 @@ local function Render()
             local PrimaryPart = Data.PrimaryPart
         
             if Vehicle and Vehicle.Parent and PrimaryPart and PrimaryPart.Parent then
-                local Team = GetTeam(Data.Engine)
+                local Team = GetVehicleTeam(Vehicle)
             
                 if not Settings.Teamcheck or (Team and LocalPlayer.Team and Team ~= LocalPlayer.Team.Name) then
                     local Screen, OnScreen = Camera:WorldToScreenPoint(PrimaryPart.Position)
