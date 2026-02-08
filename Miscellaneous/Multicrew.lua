@@ -42,45 +42,61 @@ local function GetVehicleTeam(Vehicle)
     return GetPlayerTeam(OwnerName)
 end
 
-local function IsAmmo(Name)
-    local Lower = Name:lower()
-    return Lower:match("ammo") or Lower:match("atgm") or Name:match("Ready Rack")
-end
+local function CacheVehicles()
+    if not Vehicles then return end
 
-local function CacheModules(Vehicle)
-    local Cached = {
-        Vehicle = Vehicle,
-        PrimaryPart = Vehicle.PrimaryPart,
-        Engine = nil,
-        Ammo = {},
-        Drone = nil,
-        DamageModules = Vehicle:FindFirstChild("DamageModules")
-    }
-    
-    local Modules = Cached.DamageModules
-    if Modules then
-        local EngineFolder = Modules:FindFirstChild("Engine")
-        if EngineFolder then
-            Cached.Engine = EngineFolder:FindFirstChild("Engine")
-        end
-        
-        for _, Module in ipairs(Modules:GetChildren()) do
-            if IsAmmo(Module.Name) then
-                for _, Child in ipairs(Module:GetChildren()) do
-                    if Child.Name:match("^AmmoModel") then
-                        table.insert(Cached.Ammo, Child)
-                    end
-                end
-            end
-        end
-        
-        local DroneFolder = Modules:FindFirstChild("DroneLauncher")
-        if DroneFolder then
-            Cached.Drone = DroneFolder:FindFirstChild("DroneLauncher")
+    for Vehicle, Data in pairs(Stored.Vehicles) do
+        if not Vehicle.Parent then
+            Stored.Vehicles[Vehicle] = nil
+            print("Removed: ".. Vehicle.Name)
         end
     end
     
-    return Cached
+    for _, Vehicle in ipairs(Vehicles:GetChildren()) do
+        if Vehicle.Name ~= "DONOT" and Vehicle.ClassName == "Model" and Vehicle.PrimaryPart then
+            if not Stored.Vehicles[Vehicle] then
+                local DamageModules = Vehicle:FindFirstChild("DamageModules")
+                
+                Stored.Vehicles[Vehicle] = {
+                    Vehicle = Vehicle,
+                    PrimaryPart = Vehicle.PrimaryPart,
+                    DamageModules = DamageModules,
+                    CachedAt = tick(),
+                    ModulesCached = false,
+                    Engine = nil,
+                    Ammo = {}
+                }
+                
+                task.delay(1, function()
+                    local Data = Stored.Vehicles[Vehicle]
+                    if not Data or Data.ModulesCached then return end
+                    
+                    if DamageModules and DamageModules.Parent then
+                        for _, Module in ipairs(DamageModules:GetChildren()) do
+                            if not (Module:IsA("Model") or Module:IsA("Folder")) then
+                                continue
+                            end
+                            
+                            local Name = Module.Name:lower()
+                            
+                            if Name == "engine" then
+                                local EnginePart = Module:FindFirstChild("Engine")
+                                if EnginePart then
+                                    Data.Engine = EnginePart
+                                end
+                            end
+                            
+                            if Name:find("ammo") or Name:find("atgm") then
+                                table.insert(Data.Ammo, Module)
+                            end
+                        end
+                        
+                        Data.ModulesCached = true
+                    end
+                end)
+            end
+        end
+    end
 end
 
 local function CacheDrones()
@@ -114,27 +130,6 @@ local function CacheDrones()
     end
 end
 
-local function CacheVehicles()
-    if not Vehicles then return end
-    
-    for Instance, Data in pairs(Stored.Vehicles) do
-        if not Data.Vehicle or not Data.Vehicle.Parent or not Data.Vehicle.PrimaryPart then
-            Stored.Vehicles[Instance] = nil
-        end
-    end
-    
-    for _, Vehicle in ipairs(Vehicles:GetChildren()) do
-        if Vehicle.Name ~= "DONOT" and Vehicle.ClassName == "Model" and Vehicle.PrimaryPart then
-            local CurrentCache = Stored.Vehicles[Vehicle]
-            local CurrentModules = Vehicle:FindFirstChild("DamageModules")
-            
-            if not CurrentCache or CurrentCache.DamageModules ~= CurrentModules then
-                Stored.Vehicles[Vehicle] = CacheModules(Vehicle)
-            end
-        end
-    end
-end
-
 local function Render()
     if not LocalPlayer then return end
     
@@ -152,31 +147,25 @@ local function Render()
                 if not Settings.Teamcheck or (Team and LocalPlayer.Team and Team ~= LocalPlayer.Team.Name) then
                     local Screen, OnScreen = Camera:WorldToScreenPoint(PrimaryPart.Position)
                     if OnScreen then
+                        if Settings.Vehicles.Occupied.Require and Vehicle:GetAttribute("Occupied") ~= "true" then
+                            continue
+                        end
+
                         local Text = Vehicle.Name
 
                         if HumanoidRootPart then
                             local Distance = vector.magnitude(HumanoidRootPart.Position - PrimaryPart.Position)
                             local ScaledDistance = Distance / 2.78125
 
-                            Text = string.format(
-                                "%s [%.0f]",
-                                Vehicle.Name,
-                                ScaledDistance
-                            )
+                            Text = string.format("%s [%.0f]", Vehicle.Name, ScaledDistance)
                         end
 
-                        DrawingImmediate.OutlinedText(
-                            Screen,
-                            13,
-                            Color3.fromRGB(255, 255, 255),
-                            1,
-                            Text,
-                            true,
-                            "Proggy"
-                        )
+                        local Color = Vehicle:GetAttribute("Occupied") == "true" and Settings.Vehicles.Occupied.Color or Color3.fromRGB(255, 255, 255)
+
+                        DrawingImmediate.OutlinedText(Screen, 13, Color, 1, Text, true, "Proggy")
                     end
 
-                    if Settings.Vehicles.Modules.Enabled then
+                    if Settings.Vehicles.Modules.Enabled and Data.ModulesCached then
                         if Settings.Vehicles.Modules.Engine[1] and Data.Engine and Data.Engine.Parent then
                             Highlight.Highlight(
                                 Settings.Vehicles.Modules.Engine[2], 
@@ -192,13 +181,16 @@ local function Render()
                                 FillOpacity = 0.3
                             })
                         end
-
-                            if Settings.Vehicles.Modules.Ammo[1] then
-                            for _, AmmoObject in ipairs(Data.Ammo) do
-                                if AmmoObject and AmmoObject.Parent then
+                        
+                        if Settings.Vehicles.Modules.Ammo[1] and Data.Ammo then
+                            for i = #Data.Ammo, 1, -1 do
+                                local AmmoModule = Data.Ammo[i]
+                                if not AmmoModule or not AmmoModule.Parent then
+                                    table.remove(Data.Ammo, i)
+                                else
                                     Highlight.Highlight(
                                         Settings.Vehicles.Modules.Ammo[2], 
-                                        AmmoObject, {
+                                        AmmoModule, {
                                         Outline = false,
                                         OutlineColor = Color3.fromRGB(0, 0, 0),
                                         OutlineThickness = 2,
@@ -211,22 +203,6 @@ local function Render()
                                     })
                                 end
                             end
-                        end
-
-                        if Settings.Vehicles.Modules.Drone[1] and Data.Drone and Data.Drone.Parent then
-                            Highlight.Highlight(
-                                Settings.Vehicles.Modules.Drone[2], 
-                                Data.Drone, {
-                                Outline = false,
-                                OutlineColor = Color3.fromRGB(0, 0, 0),
-                                OutlineThickness = 2,
-                                Inline = false,
-                                InlineColor = Color3.fromRGB(0, 0, 0),
-                                InlineThickness = 1,
-                                Fill = true,
-                                FillColor = Settings.Vehicles.Modules.Drone[2],
-                                FillOpacity = 0.3
-                            })
                         end
                     end
                 end
@@ -250,12 +226,13 @@ local function Render()
                 local Screen, OnScreen = Camera:WorldToScreenPoint(Part.Position)
                 if not OnScreen then continue end
 
+                local Text = "Drone"
                 if HumanoidRootPart then
                     local Distance = vector.magnitude(HumanoidRootPart.Position - Part.Position) / 2.78125
                     Text = string.format("Drone [%.0f]", Distance)
                 end
 
-                DrawingImmediate.OutlinedText(Screen, 13, Settings.Drones.Enabled[2], 1, Text or "Drone", true, "Proggy")
+                DrawingImmediate.OutlinedText(Screen, 13, Settings.Drones.Enabled[2], 1, Text, true, "Proggy")
             end
         end
     end
@@ -263,7 +240,7 @@ end
 
 task.spawn(function()
     while true do
-        task.wait(1 / 10)
+        task.wait(1 / 2)
         CacheVehicles()
         CacheDrones()
     end
