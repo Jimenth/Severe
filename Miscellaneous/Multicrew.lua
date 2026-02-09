@@ -17,6 +17,10 @@ local Stored = {
     Drones = {}
 }
 
+local function NotNumerical(Name)
+    return Name:match("%a") ~= nil
+end
+
 local function GetPlayerTeam(Name)
     if typeof(Name) ~= "string" then return nil end
 
@@ -87,7 +91,11 @@ local function CacheVehicles()
                             end
                             
                             if Name:find("ammo") or Name:find("atgm") then
-                                table.insert(Data.Ammo, Module)
+                                for _, Child in ipairs(Module:GetChildren()) do
+                                    if Child:IsA("BasePart") and NotNumerical(Child.Name) then
+                                        table.insert(Data.Ammo, Child)
+                                    end
+                                end
                             end
                         end
                         
@@ -109,9 +117,7 @@ local function CacheDrones()
     end
 
     for _, Drone in ipairs(Placed:GetChildren()) do
-        if typeof(Drone) == "Instance"
-        and Drone:IsA("Model")
-        and Drone.Name:lower():find("drone") then
+        if Drone:IsA("Model") and Drone.Name:lower():find("drone") then
 
             if not Stored.Drones[Drone] then
                 local DroneModel = Drone:FindFirstChild("Drone", true)
@@ -144,25 +150,30 @@ local function Render()
             if Vehicle and Vehicle.Parent and PrimaryPart and PrimaryPart.Parent then
                 local Team = GetVehicleTeam(Vehicle)
             
-                if not Settings.Teamcheck or (Team and LocalPlayer.Team and Team ~= LocalPlayer.Team.Name) then
+                if not is_team_check_active() or (Team and LocalPlayer.Team and Team ~= LocalPlayer.Team.Name) then
                     local Screen, OnScreen = Camera:WorldToScreenPoint(PrimaryPart.Position)
                     if OnScreen then
                         if Settings.Vehicles.Occupied.Require and Vehicle:GetAttribute("Occupied") ~= "true" then
                             continue
                         end
 
-                        local Text = Vehicle.Name
+                        local Text = ""
 
-                        if HumanoidRootPart then
-                            local Distance = vector.magnitude(HumanoidRootPart.Position - PrimaryPart.Position)
-                            local ScaledDistance = Distance / 2.78125
-
-                            Text = string.format("%s [%.0f]", Vehicle.Name, ScaledDistance)
+                        if Settings.Vehicles.Text.Name then
+                            Text = Vehicle.Name
                         end
 
-                        local Color = Vehicle:GetAttribute("Occupied") == "true" and Settings.Vehicles.Occupied.Color or Color3.fromRGB(255, 255, 255)
+                        if Settings.Vehicles.Text.Distance and HumanoidRootPart and PrimaryPart then
+                            local Distance = vector.magnitude(HumanoidRootPart.Position - PrimaryPart.Position)
+                            local DistanceText = string.format("[%.0f]", Distance / 2.78125)
 
-                        DrawingImmediate.OutlinedText(Screen, 13, Color, 1, Text, true, "Proggy")
+                            Text = Text ~= "" and (Text .. " " .. DistanceText) or DistanceText
+                        end
+
+                        if Text ~= "" then
+                            local Color = Vehicle:GetAttribute("Occupied") == "true" and Settings.Vehicles.Occupied.Color or Color3.fromRGB(255, 255, 255)
+                            DrawingImmediate.OutlinedText(Screen, 13, Color, 1, Text, true, "Proggy")
+                        end
                     end
 
                     if Settings.Vehicles.Modules.Enabled and Data.ModulesCached then
@@ -219,7 +230,7 @@ local function Render()
                     Team = GetPlayerTeam(Data.OwnerTag.Value)
                 end
 
-                if Settings.Teamcheck and Team and LocalPlayer.Team and Team == LocalPlayer.Team.Name then
+                if is_team_check_active() and Team and LocalPlayer.Team and Team == LocalPlayer.Team.Name then
                     continue
                 end
 
