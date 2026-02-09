@@ -92,7 +92,7 @@ local function CacheVehicles()
                             
                             if Name:find("ammo") or Name:find("atgm") then
                                 for _, Child in ipairs(Module:GetChildren()) do
-                                    if Child:IsA("BasePart") and NotNumerical(Child.Name) then
+                                    if Child:IsA("BasePart") and NotNumerical(Child.Name) and not Child.Name:find("cube") then
                                         table.insert(Data.Ammo, Child)
                                     end
                                 end
