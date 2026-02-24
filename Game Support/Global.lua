@@ -1,30 +1,31 @@
+if not isrbxactive() then return end
+
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local Cache = {
-	Instances = {},
+	Entities = {},
 	Folders = {}
 }
 
-local Located = false
-local Last = 0
+local Values = {
+	Located = false,
+	Last = 0
+}
 
 local function GetWeapon(Entity)
 	if not Entity then return "None" end
 	
 	for _, Tool in ipairs(Entity:GetChildren()) do
-		if Tool.ClassName == "Tool" then
+		if Tool:IsA("Tool") then
 			return Tool.Name
 		end
 	end
 
 	for _, Model in ipairs(Entity:GetChildren()) do
-		if Model.ClassName == "Model" then
-			if Model.Name ~= "Hat" and Model.Name ~= "Accessory" and 
-			   Model.Name ~= "Hair" and Model.Name ~= "GunModel" and 
-			   Model.Name ~= "HolsterModel" and Model.Name ~= "Model" and
-			   not Model.Name:match("^Armor") then
+		if Model:IsA("Model") then
+			if Model.Name ~= "Hat" and Model.Name ~= "Accessory" and Model.Name ~= "Hair" and Model.Name ~= "GunModel" and Model.Name ~= "HolsterModel" and Model.Name ~= "Model" and not Model.Name:match("^Armor") then
 				if Model:FindFirstChild("Muzzle") or Model:FindFirstChild("Handle") then
 					return Model.Name
 				end
@@ -254,15 +255,15 @@ local function Locate()
 			local Parent = Object.Parent
 			
 			if Parent and Parent ~= Workspace then
-				local IsCharacter = false
+				local Character = false
 				for _, Player in ipairs(Players:GetChildren()) do
 					if Player.Character == Object then
-						IsCharacter = true
+						Character = true
 						break
 					end
 				end
 				
-				if not IsCharacter then
+				if not Character then
 					Allowed[Parent] = (Allowed[Parent] or 0) + 1
 				end
 			end
@@ -279,14 +280,19 @@ local function Locate()
 		table.insert(Cache.Folders, Workspace)
 	end
 	
-	Located = true
-	Last = os.clock()
+	Values.Located = true
+	Values.Last = os.clock()
 end
 
-local function PlayerScan(LocalPlayer, LocalCharacter, TState, Seen)
+local function ScanPlayers(Table)
 	for _, Player in ipairs(Players:GetChildren()) do
 		pcall(function()
-			if not Player or Player == LocalPlayer then return end
+			if not Player then return end
+
+			local LocalPlayer = Players.LocalPlayer
+			if Player == LocalPlayer then return end
+
+			local LocalCharacter = LocalPlayer.Character
 			
 			local Character = Player.Character
 			if not Character or Character == LocalCharacter then return end
@@ -300,19 +306,19 @@ local function PlayerScan(LocalPlayer, LocalCharacter, TState, Seen)
 			local Key = tostring(Character)
 			local Weapon = GetWeapon(Character)
 			
-			if TState and LocalPlayer.Team and Player.Team == LocalPlayer.Team then
-				if Cache.Instances[Key] then
+			if is_team_check_active() and LocalPlayer.Team and Player.Team == LocalPlayer.Team then
+				if Cache.Entities[Key] then
 					remove_model_data(Key)
-					Cache.Instances[Key] = nil
+					Cache.Entities[Key] = nil
 				end
 				return
 			end
 			
-			if not Cache.Instances[Key] then
+			if not Cache.Entities[Key] then
 				local ID, Data = GetPlayerData(Player)
 				if ID and Data then
 					if add_model_data(Data, ID) then
-						Cache.Instances[ID] = Character
+						Cache.Entities[ID] = Character
 					end
 				end
 			else
@@ -320,15 +326,17 @@ local function PlayerScan(LocalPlayer, LocalCharacter, TState, Seen)
 				edit_model_data({ Health = Humanoid.Health }, Key)
 			end
 			
-			Seen[Key] = true
+			Table[Key] = true
 		end)
 	end
 end
 
-local function NPCScan(LocalCharacter, Seen)
+local function ScanEntities(Table)
 	for _, Folder in ipairs(Cache.Folders) do
 		if not Folder or not Folder.Parent then continue end
 		
+		local LocalPlayer = Players.LocalPlayer
+		local LocalCharacter = LocalPlayer.Character
 		local NPCs = Folder == Workspace and Folder:GetDescendants() or Folder:GetChildren()
 		
 		for _, NPC in ipairs(NPCs) do
@@ -336,14 +344,15 @@ local function NPCScan(LocalCharacter, Seen)
 				if not NPC or NPC.ClassName ~= "Model" or NPC == LocalCharacter then return end
 				if not Validated(NPC) then return end
 				
-				local IsPlayerChar = false
+				local Invalid = false
 				for _, Player in ipairs(Players:GetChildren()) do
 					if Player.Character == NPC then
-						IsPlayerChar = true
+						Invalid = true
 						break
 					end
 				end
-				if IsPlayerChar then return end
+
+				if Invalid then return end
 				
 				local Key = tostring(NPC)
 				local Parts = GetEntityParts(NPC)
@@ -353,11 +362,11 @@ local function NPCScan(LocalCharacter, Seen)
 				local Humanoid = NPC:FindFirstChildOfClass("Humanoid")
 				local Weapon = GetWeapon(NPC)
 				
-				if not Cache.Instances[Key] then
+				if not Cache.Entities[Key] then
 					local ID, Data = GetEntityData(NPC, Parts)
 					if ID and Data then
 						if add_model_data(Data, ID) then
-							Cache.Instances[ID] = NPC
+							Cache.Entities[ID] = NPC
 						end
 					end
 				else
@@ -367,41 +376,39 @@ local function NPCScan(LocalCharacter, Seen)
 					end
 				end
 				
-				Seen[Key] = true
+				Table[Key] = true
 			end)
 		end
 	end
 end
 
 RunService.PostLocal:Connect(function()
-	local LocalPlayer = Players.LocalPlayer
-	if not LocalPlayer then return end
-	
-	local LocalCharacter = LocalPlayer.Character
-	
-	if not Located then pcall(Locate) return end
-	if #Cache.Folders == 0 and (os.clock() - Last) > 5 then Located = false return end
-	
-	local Seen = {}
-	
-	for Key, Model in pairs(Cache.Instances) do
-		pcall(function()
-			if not Model or not Model.Parent then
-				remove_model_data(Key)
-				Cache.Instances[Key] = nil
-				return
-			end
-			
-			if not Seen[Key] then
-				local HumanoidRootPart = Model:FindFirstChild("HumanoidRootPart")
-				if not HumanoidRootPart then
-					remove_model_data(Key)
-					Cache.Instances[Key] = nil
-				end
-			end
-		end)
-	end
+    local LocalPlayer = Players.LocalPlayer
+    if not LocalPlayer then return end
+    
+    if not Values.Located then pcall(Locate) return end
+    if #Cache.Folders == 0 and (os.clock() - Values.Last) > 5 then Values.Located = false return end
+    
+    local Seen = {}
+    
+    for Key, Model in pairs(Cache.Entities) do
+        pcall(function()
+            if not Model or not Model.Parent then
+                remove_model_data(Key)
+                Cache.Entities[Key] = nil
+                return
+            end
+            
+            if not Seen[Key] then
+                local HumanoidRootPart = Model:FindFirstChild("HumanoidRootPart")
+                if not HumanoidRootPart then
+                    remove_model_data(Key)
+                    Cache.Entities[Key] = nil
+                end
+            end
+        end)
+    end
 
-	PlayerScan(LocalPlayer, LocalCharacter, is_team_check_active(), Seen)
-	NPCScan(LocalCharacter, Seen)
+    ScanPlayers(Seen)
+    ScanEntities(Seen)
 end)
