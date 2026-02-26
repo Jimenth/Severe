@@ -25,10 +25,10 @@ local function GetPlayerTeam(Name)
     if typeof(Name) ~= "string" then return nil end
 
     local Player = Players:FindFirstChild(Name)
-    if not Player then return nil end 
+    if not Player then return nil end
 
     local Team = Player.Team
-    if Team then
+    if Team and Team.Parent then
         return Team.Name
     else
         return "Unknown Team"
@@ -52,44 +52,43 @@ local function CacheVehicles()
     for Vehicle, Data in pairs(Stored.Vehicles) do
         if not Vehicle.Parent then
             Stored.Vehicles[Vehicle] = nil
-            print("Removed: ".. Vehicle.Name)
         end
     end
-    
+
     for _, Vehicle in ipairs(Vehicles:GetChildren()) do
         if Vehicle.Name ~= "DONOT" and Vehicle.ClassName == "Model" and Vehicle.PrimaryPart then
             if not Stored.Vehicles[Vehicle] then
                 local DamageModules = Vehicle:FindFirstChild("DamageModules")
-                
+
                 Stored.Vehicles[Vehicle] = {
                     Vehicle = Vehicle,
                     PrimaryPart = Vehicle.PrimaryPart,
                     DamageModules = DamageModules,
                     CachedAt = tick(),
-                    ModulesCached = false,
+                    Modules = false,
                     Engine = nil,
                     Ammo = {}
                 }
-                
+
                 task.delay(1, function()
                     local Data = Stored.Vehicles[Vehicle]
-                    if not Data or Data.ModulesCached then return end
-                    
+                    if not Data or Data.Modules then return end
+
                     if DamageModules and DamageModules.Parent then
                         for _, Module in ipairs(DamageModules:GetChildren()) do
                             if not (Module:IsA("Model") or Module:IsA("Folder")) then
                                 continue
                             end
-                            
+
                             local Name = Module.Name:lower()
-                            
+
                             if Name == "engine" then
                                 local EnginePart = Module:FindFirstChild("Engine")
                                 if EnginePart then
                                     Data.Engine = EnginePart
                                 end
                             end
-                            
+
                             if Name:find("ammo") or Name:find("atgm") then
                                 for _, Child in ipairs(Module:GetChildren()) do
                                     if Child:IsA("BasePart") and NotNumerical(Child.Name) and not Child.Name:find("cube") then
@@ -98,8 +97,8 @@ local function CacheVehicles()
                                 end
                             end
                         end
-                        
-                        Data.ModulesCached = true
+
+                        Data.Modules = true
                     end
                 end)
             end
@@ -120,15 +119,15 @@ local function CacheDrones()
         if Drone:IsA("Model") and Drone.Name:lower():find("drone") then
 
             if not Stored.Drones[Drone] then
-                local DroneModel = Drone:FindFirstChild("Drone", true)
-                local DronePart = DroneModel and DroneModel:FindFirstChild("Drone", true)
-                local OwnershipTag = Drone:FindFirstChild("OwnershipTag", true)
+                local DroneModel = Drone:FindFirstDescendant("Drone")
+                local DronePart = DroneModel and DroneModel:IsA("BasePart") and DroneModel or (DroneModel and DroneModel:FindFirstChildOfClass("BasePart"))
+                local OwnerTag = Drone:FindFirstDescendant("OwnershipTag")
 
                 if DronePart and DronePart:IsA("BasePart") then
                     Stored.Drones[Drone] = {
                         Model = Drone,
                         Part = DronePart,
-                        OwnerTag = OwnershipTag
+                        OwnerTag = OwnerTag
                     }
                 end
             end
@@ -138,19 +137,22 @@ end
 
 local function Render()
     if not LocalPlayer then return end
-    
+
     local Character = LocalPlayer.Character
     local HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
-    
+
+    local LocalTeam = LocalPlayer.Team
+    local LocalTeamName = LocalTeam and LocalTeam.Parent and LocalTeam.Name
+
     if Settings.Vehicles.Enabled then
         for Index, Data in pairs(Stored.Vehicles) do
             local Vehicle = Data.Vehicle
             local PrimaryPart = Data.PrimaryPart
-        
+
             if Vehicle and Vehicle.Parent and PrimaryPart and PrimaryPart.Parent then
                 local Team = GetVehicleTeam(Vehicle)
-            
-                if not is_team_check_active() or (Team and LocalPlayer.Team and Team ~= LocalPlayer.Team.Name) then
+
+                if not is_team_check_active() or (Team and not LocalTeamName or Team ~= LocalTeamName) then
                     local Screen, OnScreen = Camera:WorldToScreenPoint(PrimaryPart.Position)
                     if OnScreen then
                         if Settings.Vehicles.Occupied.Require and Vehicle:GetAttribute("Occupied") ~= "true" then
@@ -172,14 +174,14 @@ local function Render()
 
                         if Text ~= "" then
                             local Color = Vehicle:GetAttribute("Occupied") == "true" and Settings.Vehicles.Occupied.Color or Color3.fromRGB(255, 255, 255)
-                            DrawingImmediate.OutlinedText(Screen, 13, Color, 1, Text, true, "Proggy")
+                            DrawingImmediate.OutlinedText(Screen, 13, Color, 1, Text, true, "Proxyma_Condensed")
                         end
                     end
 
-                    if Settings.Vehicles.Modules.Enabled and Data.ModulesCached then
+                    if Settings.Vehicles.Modules.Enabled and Data.Modules then
                         if Settings.Vehicles.Modules.Engine[1] and Data.Engine and Data.Engine.Parent then
                             Highlight.Highlight(
-                                Settings.Vehicles.Modules.Engine[2], 
+                                Settings.Vehicles.Modules.Engine[2],
                                 Data.Engine, {
                                 Outline = false,
                                 OutlineColor = Color3.fromRGB(0, 0, 0),
@@ -192,7 +194,7 @@ local function Render()
                                 FillOpacity = 0.3
                             })
                         end
-                        
+
                         if Settings.Vehicles.Modules.Ammo[1] and Data.Ammo then
                             for i = #Data.Ammo, 1, -1 do
                                 local AmmoModule = Data.Ammo[i]
@@ -200,7 +202,7 @@ local function Render()
                                     table.remove(Data.Ammo, i)
                                 else
                                     Highlight.Highlight(
-                                        Settings.Vehicles.Modules.Ammo[2], 
+                                        Settings.Vehicles.Modules.Ammo[2],
                                         AmmoModule, {
                                         Outline = false,
                                         OutlineColor = Color3.fromRGB(0, 0, 0),
@@ -219,32 +221,32 @@ local function Render()
                 end
             end
         end
+    end
 
-        if Settings.Drones.Enabled[1] then
-            for _, Data in pairs(Stored.Drones) do
-                local Part = Data.Part
-                if not Part or not Part.Parent then continue end
+    if Settings.Drones.Enabled then
+        for _, Data in pairs(Stored.Drones) do
+            local Part = Data.Part
+            if not Part or not Part.Parent then continue end
 
-                local Team
-                if Data.OwnerTag and Data.OwnerTag:IsA("StringValue") then
-                    Team = GetPlayerTeam(Data.OwnerTag.Value)
-                end
-
-                if is_team_check_active() and Team and LocalPlayer.Team and Team == LocalPlayer.Team.Name then
-                    continue
-                end
-
-                local Screen, OnScreen = Camera:WorldToScreenPoint(Part.Position)
-                if not OnScreen then continue end
-
-                local Text = "Drone"
-                if HumanoidRootPart then
-                    local Distance = vector.magnitude(HumanoidRootPart.Position - Part.Position) / 2.78125
-                    Text = string.format("Drone [%.0f]", Distance)
-                end
-
-                DrawingImmediate.OutlinedText(Screen, 13, Settings.Drones.Enabled[2], 1, Text, true, "Proggy")
+            local Team
+            if Data.OwnerTag and Data.OwnerTag.Parent and Data.OwnerTag:IsA("StringValue") then
+                Team = GetPlayerTeam(Data.OwnerTag.Value)
             end
+
+            if is_team_check_active() and Team and LocalTeamName and Team == LocalTeamName then
+                continue
+            end
+
+            local Screen, OnScreen = Camera:WorldToScreenPoint(Part.Position)
+            if not OnScreen then continue end
+
+            local Text = "Drone"
+            if HumanoidRootPart then
+                local Distance = vector.magnitude(HumanoidRootPart.Position - Part.Position) / 2.78125
+                Text = string.format("Drone [%.0f]", Distance)
+            end
+
+            DrawingImmediate.OutlinedText(Screen, 13, Settings.Drones.Color, 1, Text, true, "Proxyma_Condensed")
         end
     end
 end
