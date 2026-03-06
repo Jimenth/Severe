@@ -1,6 +1,5 @@
 --!optimize 2
 local Settings = _G.Settings
-local Highlight = loadstring(game:HttpGet("https://raw.githubusercontent.com/Jimenth/Severe/refs/heads/main/Modules/Highlight.lua"))();
 
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
@@ -17,6 +16,154 @@ local Stored = {
     Drones = {}
 }
 
+local Convex = {
+    Scratch = {
+        Points = {},
+        Hull = {},
+        Poly = {}
+    },
+
+    Static = {
+        HWMPoints = 0,
+        HWMHull = 0,
+        HWMPoly = 0
+    }
+}
+
+local function TruncateBuffer(Buffer, NewSize, HighWaterMark)
+    for Index = NewSize + 1, HighWaterMark do
+        Buffer[Index] = nil
+    end
+    return math.max(NewSize, HighWaterMark)
+end
+
+local function Cross2D(OriginX, OriginY, PointAX, PointAY, PointBX, PointBY)
+    return (PointAX - OriginX) * (PointBY - OriginY) - (PointAY - OriginY) * (PointBX - OriginX)
+end
+
+local function ConvexHull(Points, PointCount, Outer)
+    if PointCount == 0 then return 0 end
+    if PointCount == 1 then Outer[1] = Points[1]; return 1 end
+    if PointCount == 2 then Outer[1] = Points[1]; Outer[2] = Points[2]; return 2 end
+
+    table.sort(Points, function(PointA, PointB)
+        return PointA.X < PointB.X or (PointA.X == PointB.X and PointA.Y < PointB.Y)
+    end)
+
+    local Size = 0
+
+    for Index = 1, PointCount do
+        local Point = Points[Index]
+        while Size >= 2 and Cross2D(Outer[Size - 1].X, Outer[Size - 1].Y, Outer[Size].X, Outer[Size].Y, Point.X, Point.Y) <= 0 do
+            Size = Size - 1
+        end
+        Size = Size + 1
+        Outer[Size] = Point
+    end
+
+    local LowerHullSize = Size
+    for Index = PointCount - 1, 1, -1 do
+        local Point = Points[Index]
+        while Size > LowerHullSize and Cross2D(Outer[Size - 1].X, Outer[Size - 1].Y, Outer[Size].X, Outer[Size].Y, Point.X, Point.Y) <= 0 do
+            Size = Size - 1
+        end
+        Size = Size + 1
+        Outer[Size] = Point
+    end
+
+    return Size - 1
+end
+
+local function ProjectPartCorners(Part, WriteOffset)
+    local PositionX = Part.Position.X
+    local PositionY = Part.Position.Y
+    local PositionZ = Part.Position.Z
+
+    local HalfSizeX = Part.Size.X * 0.5
+    local HalfSizeY = Part.Size.Y * 0.5
+    local HalfSizeZ = Part.Size.Z * 0.5
+
+    local RightVector = Part.RightVector
+    local UpVector = Part.UpVector
+    local LookVector = Part.LookVector
+
+    local RX = RightVector.X * HalfSizeX
+    local RY = RightVector.Y * HalfSizeX
+    local RZ = RightVector.Z * HalfSizeX
+
+    local UX = UpVector.X * HalfSizeY
+    local UY = UpVector.Y * HalfSizeY
+    local UZ = UpVector.Z * HalfSizeY
+
+    local LX = LookVector.X * HalfSizeZ
+    local LY = LookVector.Y * HalfSizeZ
+    local LZ = LookVector.Z * HalfSizeZ
+
+    local SignR = 1
+    for _ = 1, 2 do
+        local SignU = 1
+        for _ = 1, 2 do
+            local SignL = 1
+            for _ = 1, 2 do
+                local WorldPoint = Vector3.new(
+                    PositionX + SignR * RX + SignU * UX + SignL * LX,
+                    PositionY + SignR * RY + SignU * UY + SignL * LY,
+                    PositionZ + SignR * RZ + SignU * UZ + SignL * LZ
+                )
+
+                local ScreenPoint, OnScreen = Camera:WorldToScreenPoint(WorldPoint)
+                if OnScreen then
+                    WriteOffset = WriteOffset + 1
+                    local Slot = Convex.Scratch.Points[WriteOffset]
+                    if Slot then
+                        Slot.X = ScreenPoint.X
+                        Slot.Y = ScreenPoint.Y
+                    else
+                        Convex.Scratch.Points[WriteOffset] = {X = ScreenPoint.X, Y = ScreenPoint.Y}
+                    end
+                end
+
+                SignL = -1
+            end
+            SignU = -1
+        end
+        SignR = -1
+    end
+
+    return WriteOffset
+end
+
+local function DrawFilledConvexPoly(Hull, Size, Color, Opacity)
+    if Size < 3 then return end
+
+    local Pivot = Vector2.new(Hull[1].X, Hull[1].Y)
+    for Index = 2, Size - 1 do
+        DrawingImmediate.FilledTriangle(Pivot, Vector2.new(Hull[Index].X, Hull[Index].Y), Vector2.new(Hull[Index + 1].X, Hull[Index + 1].Y), Color, Opacity)
+    end
+end
+
+local function DrawHullOutline(Hull, Size, Color, Opacity, Thickness)
+    if Size < 2 then return end
+
+    for Index = 1, Size do
+        local Entry = Hull[Index]
+        Convex.Scratch.Poly[Index] = Vector2.new(Entry.X, Entry.Y)
+    end
+
+    Convex.Scratch.Poly[Size + 1] = Vector2.new(Hull[1].X, Hull[1].Y)
+    Convex.Scratch.Poly[Size + 2] = nil
+
+    if Size + 1 < Convex.Static.HWMPoly then
+        for Index = Size + 2, Convex.Static.HWMPoly do
+            Convex.Scratch.Poly[Index] = nil
+        end
+    end
+
+    Convex.Static.HWMPoly = math.max(Convex.Static.HWMPoly, Size + 1)
+
+    DrawingImmediate.Polyline(Convex.Scratch.Poly, Color, Opacity, Thickness)
+end
+
 local function NotNumerical(Name)
     return Name:match("%a") ~= nil
 end
@@ -30,107 +177,102 @@ local function GetPlayerTeam(Name)
     local Team = Player.Team
     if Team and Team.Parent then
         return Team.Name
-    else
-        return "Unknown Team"
     end
+
+    return "Unknown Team"
 end
 
 local function GetVehicleTeam(Vehicle)
     if not Vehicle then return nil end
 
     local OwnerName = Vehicle:GetAttribute("Requester")
-    if typeof(OwnerName) ~= "string" then
-        return nil
-    end
-
+    if typeof(OwnerName) ~= "string" then return nil end
+    
     return GetPlayerTeam(OwnerName)
 end
 
-local function CacheVehicles()
+local function VehicleCache()
     if not Vehicles then return end
 
-    for Vehicle, Data in pairs(Stored.Vehicles) do
-        if not Vehicle.Parent then
-            Stored.Vehicles[Vehicle] = nil
+    local Current = {}
+
+    for _, Vehicle in ipairs(Vehicles:GetChildren()) do
+        if Vehicle.Name == "DONOT" or Vehicle.ClassName ~= "Model" or not Vehicle.PrimaryPart then
+            continue
+        end
+
+        local Address = Vehicle
+        Current[Address] = true
+
+        if not Stored.Vehicles[Address] then
+            local DamageModules = Vehicle:FindFirstChild("DamageModules")
+
+            Stored.Vehicles[Address] = {Vehicle = Vehicle, PrimaryPart = Vehicle.PrimaryPart, Groups = nil}
+
+            task.delay(1, function()
+                local Data = Stored.Vehicles[Address]
+                if not Data or Data.Groups then return end
+                if not (DamageModules and DamageModules.Parent) then return end
+
+                local Groups = {}
+
+                for _, Module in ipairs(DamageModules:GetChildren()) do
+                    if not (Module:IsA("Model") or Module:IsA("Folder")) then continue end
+
+                    local ModuleName = Module.Name:lower()
+
+                    if ModuleName == "engine" then
+                        local EnginePart = Module:FindFirstChild("Engine")
+                        if EnginePart then Groups[#Groups + 1] = {Type = "Engine", Parts = {EnginePart}} end
+
+                    elseif ModuleName:find("ammo") or ModuleName:find("atgm") then
+                        local Parts = {}
+                        for _, Child in ipairs(Module:GetChildren()) do
+                            if Child:IsA("BasePart") and NotNumerical(Child.Name) and not Child.Name:find("cube") then
+                                Parts[#Parts + 1] = Child
+                            end
+                        end
+                        if #Parts > 0 then
+                            Groups[#Groups + 1] = {Type = "Ammo", Parts = Parts}
+                        end
+                    end
+                end
+
+                Data.Groups = Groups
+            end)
         end
     end
 
-    for _, Vehicle in ipairs(Vehicles:GetChildren()) do
-        if Vehicle.Name ~= "DONOT" and Vehicle.ClassName == "Model" and Vehicle.PrimaryPart then
-            if not Stored.Vehicles[Vehicle] then
-                local DamageModules = Vehicle:FindFirstChild("DamageModules")
-
-                Stored.Vehicles[Vehicle] = {
-                    Vehicle = Vehicle,
-                    PrimaryPart = Vehicle.PrimaryPart,
-                    DamageModules = DamageModules,
-                    CachedAt = tick(),
-                    Modules = false,
-                    Engine = nil,
-                    Ammo = {}
-                }
-
-                task.delay(1, function()
-                    local Data = Stored.Vehicles[Vehicle]
-                    if not Data or Data.Modules then return end
-
-                    if DamageModules and DamageModules.Parent then
-                        for _, Module in ipairs(DamageModules:GetChildren()) do
-                            if not (Module:IsA("Model") or Module:IsA("Folder")) then
-                                continue
-                            end
-
-                            local Name = Module.Name:lower()
-
-                            if Name == "engine" then
-                                local EnginePart = Module:FindFirstChild("Engine")
-                                if EnginePart then
-                                    Data.Engine = EnginePart
-                                end
-                            end
-
-                            if Name:find("ammo") or Name:find("atgm") then
-                                for _, Child in ipairs(Module:GetChildren()) do
-                                    if Child:IsA("BasePart") and NotNumerical(Child.Name) and not Child.Name:find("cube") then
-                                        table.insert(Data.Ammo, Child)
-                                    end
-                                end
-                            end
-                        end
-
-                        Data.Modules = true
-                    end
-                end)
-            end
+    for Address in pairs(Stored.Vehicles) do
+        if not Current[Address] then
+            Stored.Vehicles[Address] = nil
         end
     end
 end
 
-local function CacheDrones()
+local function DroneCache()
     if not Placed then return end
 
-    for Instance, Data in pairs(Stored.Drones) do
-        if not Data.Model or not Data.Model.Parent or not Data.Part or not Data.Part.Parent then
-            Stored.Drones[Instance] = nil
+    local Current = {}
+
+    for _, Drone in ipairs(Placed:GetChildren()) do
+        if not (Drone:IsA("Model") and Drone.Name:lower():find("drone")) then continue end
+
+        local DroneModel = Drone:FindFirstDescendant("Drone")
+        local DronePart  = DroneModel and DroneModel:IsA("BasePart") and DroneModel or (DroneModel and DroneModel:FindFirstChildOfClass("BasePart"))
+
+        if not (DronePart and DronePart:IsA("BasePart")) then continue end
+        Current[Drone] = true
+
+        if not Stored.Drones[Drone] then
+            local OwnershipTag = Drone:FindFirstDescendant("OwnershipTag")
+            Stored.Drones[Drone] = {Model = Drone, Part = DronePart, OwnerTag = OwnershipTag}
         end
     end
 
-    for _, Drone in ipairs(Placed:GetChildren()) do
-        if Drone:IsA("Model") and Drone.Name:lower():find("drone") then
-
-            if not Stored.Drones[Drone] then
-                local DroneModel = Drone:FindFirstDescendant("Drone")
-                local DronePart = DroneModel and DroneModel:IsA("BasePart") and DroneModel or (DroneModel and DroneModel:FindFirstChildOfClass("BasePart"))
-                local OwnerTag = Drone:FindFirstDescendant("OwnershipTag")
-
-                if DronePart and DronePart:IsA("BasePart") then
-                    Stored.Drones[Drone] = {
-                        Model = Drone,
-                        Part = DronePart,
-                        OwnerTag = OwnerTag
-                    }
-                end
-            end
+    for Instance in pairs(Stored.Drones) do
+        if not Current[Instance] then
+            Stored.Drones[Instance] = nil
         end
     end
 end
@@ -141,84 +283,71 @@ local function Render()
     local Character = LocalPlayer.Character
     local HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
 
-    local LocalTeam = LocalPlayer.Team
-    local LocalTeamName = LocalTeam and LocalTeam.Parent and LocalTeam.Name
-
     if Settings.Vehicles.Enabled then
-        for Index, Data in pairs(Stored.Vehicles) do
+        for _, Data in pairs(Stored.Vehicles) do
             local Vehicle = Data.Vehicle
             local PrimaryPart = Data.PrimaryPart
 
-            if Vehicle and Vehicle.Parent and PrimaryPart and PrimaryPart.Parent then
+            if not (Vehicle and Vehicle.Parent and PrimaryPart and PrimaryPart.Parent) then continue end
+
+            if is_team_check_active() then
                 local Team = GetVehicleTeam(Vehicle)
+                if LocalPlayer.Team and LocalPlayer.Team.Parent and Team == LocalPlayer.Team.Name then
+                    continue
+                end
+            end
 
-                if not is_team_check_active() or (Team and not LocalTeamName or Team ~= LocalTeamName) then
-                    local Screen, OnScreen = Camera:WorldToScreenPoint(PrimaryPart.Position)
-                    if OnScreen then
-                        if Settings.Vehicles.Occupied.Require and Vehicle:GetAttribute("Occupied") ~= "true" then
-                            continue
-                        end
+            local Screen, OnScreen = Camera:WorldToScreenPoint(PrimaryPart.Position)
 
-                        local Text = ""
+            if OnScreen then
+                if not (Settings.Vehicles.Occupied.Require and Vehicle:GetAttribute("Occupied") ~= "true") then
+                    local Text = ""
 
-                        if Settings.Vehicles.Text.Name then
-                            Text = Vehicle.Name
-                        end
-
-                        if Settings.Vehicles.Text.Distance and HumanoidRootPart and PrimaryPart then
-                            local Distance = vector.magnitude(HumanoidRootPart.Position - PrimaryPart.Position)
-                            local DistanceText = string.format("[%.0f]", Distance / 2.78125)
-
-                            Text = Text ~= "" and (Text .. " " .. DistanceText) or DistanceText
-                        end
-
-                        if Text ~= "" then
-                            local Color = Vehicle:GetAttribute("Occupied") == "true" and Settings.Vehicles.Occupied.Color or Color3.fromRGB(255, 255, 255)
-                            DrawingImmediate.OutlinedText(Screen, 13, Color, 1, Text, true, "Proxyma_Condensed")
-                        end
+                    if Settings.Vehicles.Text.Name then
+                        Text = Vehicle.Name
                     end
 
-                    if Settings.Vehicles.Modules.Enabled and Data.Modules then
-                        if Settings.Vehicles.Modules.Engine[1] and Data.Engine and Data.Engine.Parent then
-                            Highlight.Highlight(
-                                Settings.Vehicles.Modules.Engine[2],
-                                Data.Engine, {
-                                Outline = false,
-                                OutlineColor = Color3.fromRGB(0, 0, 0),
-                                OutlineThickness = 2,
-                                Inline = false,
-                                InlineColor = Color3.fromRGB(0, 0, 0),
-                                InlineThickness = 1,
-                                Fill = true,
-                                FillColor = Settings.Vehicles.Modules.Engine[2],
-                                FillOpacity = 0.3
-                            })
-                        end
+                    if Settings.Vehicles.Text.Distance and HumanoidRootPart then
+                        local Distance     = vector.magnitude(HumanoidRootPart.Position - PrimaryPart.Position)
+                        local DistanceText = string.format("[%.0f]", Distance / 2.78125)
+                        Text = Text ~= "" and (Text .. " " .. DistanceText) or DistanceText
+                    end
 
-                        if Settings.Vehicles.Modules.Ammo[1] and Data.Ammo then
-                            for i = #Data.Ammo, 1, -1 do
-                                local AmmoModule = Data.Ammo[i]
-                                if not AmmoModule or not AmmoModule.Parent then
-                                    table.remove(Data.Ammo, i)
-                                else
-                                    Highlight.Highlight(
-                                        Settings.Vehicles.Modules.Ammo[2],
-                                        AmmoModule, {
-                                        Outline = false,
-                                        OutlineColor = Color3.fromRGB(0, 0, 0),
-                                        OutlineThickness = 2,
-                                        Inline = false,
-                                        InlineColor = Color3.fromRGB(0, 0, 0),
-                                        InlineThickness = 1,
-                                        Fill = true,
-                                        FillColor = Settings.Vehicles.Modules.Ammo[2],
-                                        FillOpacity = 0.3
-                                    })
-                                end
-                            end
-                        end
+                    if Text ~= "" then
+                        local TextColor = Vehicle:GetAttribute("Occupied") == "true" and Settings.Vehicles.Occupied.Color or Color3.fromRGB(255, 255, 255)
+                        DrawingImmediate.OutlinedText(Screen, 12, TextColor, 1, Text, true, "Proxyma_Condensed")
                     end
                 end
+            end
+
+            local Groups = Data.Groups
+            if not (Settings.Vehicles.Modules.Enabled and Groups) then continue end
+
+            for _, Group in ipairs(Groups) do
+                local GroupType = Group.Type
+
+                local Enabled = (GroupType == "Engine" and Settings.Vehicles.Modules.Engine[1]) or (GroupType == "Ammo"   and Settings.Vehicles.Modules.Ammo[1])
+                if not Enabled then continue end
+
+                local Color = GroupType == "Engine" and Settings.Vehicles.Modules.Engine[2] or  Settings.Vehicles.Modules.Ammo[2]
+
+                local PointCount = 0
+                for _, Part in ipairs(Group.Parts) do
+                    if Part and Part.Parent then
+                        PointCount = ProjectPartCorners(Part, PointCount)
+                    end
+                end
+
+                if PointCount == 0 then continue end
+                Convex.Static.HWMPoints = TruncateBuffer(Convex.Scratch.Points, PointCount, Convex.Static.HWMPoints)
+
+                local Size = ConvexHull(Convex.Scratch.Points, PointCount, Convex.Scratch.Hull)
+                if Size == 0 then continue end
+
+                Convex.Static.HWMHull = TruncateBuffer(Convex.Scratch.Hull, Size, Convex.Static.HWMHull)
+
+                DrawFilledConvexPoly(Convex.Scratch.Hull, Size, Color, 0.3)
+                DrawHullOutline(Convex.Scratch.Hull, Size, Color, 1, 1)
             end
         end
     end
@@ -228,34 +357,35 @@ local function Render()
             local Part = Data.Part
             if not Part or not Part.Parent then continue end
 
-            local Team
-            if Data.OwnerTag and Data.OwnerTag.Parent and Data.OwnerTag:IsA("StringValue") then
-                Team = GetPlayerTeam(Data.OwnerTag.Value)
-            end
-
-            if is_team_check_active() and Team and LocalTeamName and Team == LocalTeamName then
-                continue
+            if is_team_check_active() then
+                local Team
+                if Data.OwnerTag and Data.OwnerTag.Parent and Data.OwnerTag:IsA("StringValue") then
+                    Team = GetPlayerTeam(Data.OwnerTag.Value)
+                end
+                if LocalPlayer.Team and LocalPlayer.Team.Parent and Team == LocalPlayer.Team.Name then
+                    continue
+                end
             end
 
             local Screen, OnScreen = Camera:WorldToScreenPoint(Part.Position)
             if not OnScreen then continue end
 
-            local Text = "Drone"
+            local DroneText = "Drone"
             if HumanoidRootPart then
                 local Distance = vector.magnitude(HumanoidRootPart.Position - Part.Position) / 2.78125
-                Text = string.format("Drone [%.0f]", Distance)
+                DroneText = string.format("Drone [%.0f]", Distance)
             end
 
-            DrawingImmediate.OutlinedText(Screen, 13, Settings.Drones.Color, 1, Text, true, "Proxyma_Condensed")
+            DrawingImmediate.OutlinedText(Screen, 12, Settings.Drones.Color, 1, DroneText, true, "Proxyma_Condensed")
         end
     end
 end
 
 task.spawn(function()
     while true do
-        task.wait(1 / 2)
-        CacheVehicles()
-        CacheDrones()
+        task.wait(0.5)
+        VehicleCache()
+        DroneCache()
     end
 end)
 
