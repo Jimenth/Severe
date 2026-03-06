@@ -3,417 +3,411 @@ local Camera = workspace.CurrentCamera
 
 local IntersectionCuts = {}
 local BlockingPolygons = {}
-local ScreenPolygons = {}
-local OutlineSegments = {}
+local ScreenPolygons   = {}
+local OutlineSegments  = {}
 
-local function CrossProduct2D(Origin, PointA, PointB) 
-    return (PointA.X - Origin.X) * (PointB.Y - Origin.Y) - (PointA.Y - Origin.Y) * (PointB.X - Origin.X) 
+local EDGE_TOLERANCE = 0.1
+
+local function CrossProduct2D(Origin, A, B)
+    return (A.X - Origin.X) * (B.Y - Origin.Y) - (A.Y - Origin.Y) * (B.X - Origin.X)
 end
 
-local function SortPointsXY(A, B) 
-    return A.X < B.X or (A.X == B.X and A.Y < B.Y) 
+local function SortPointsXY(A, B)
+    return A.X < B.X or (A.X == B.X and A.Y < B.Y)
 end
 
 local function ComputeConvexHull(Points)
-    if #Points < 3 then return Points end
+    local Count = #Points
+    if Count < 3 then return Points end
+
     table.sort(Points, SortPointsXY)
-    
-    local LowerHull = {}
-    local UpperHull = {}
+
+    local Lower      = {}
+    local Upper      = {}
     local LowerCount = 0
     local UpperCount = 0
-    
-    for I = 1, #Points do
-        local CurrentPoint = Points[I]
-        while LowerCount >= 2 and 
-              CrossProduct2D(LowerHull[LowerCount - 1], LowerHull[LowerCount], CurrentPoint) <= 0 do
-            LowerHull[LowerCount] = nil
+
+    for Index = 1, Count do
+        local P = Points[Index]
+        while LowerCount >= 2 and CrossProduct2D(Lower[LowerCount - 1], Lower[LowerCount], P) <= 0 do
+            Lower[LowerCount] = nil
             LowerCount -= 1
         end
         LowerCount += 1
-        LowerHull[LowerCount] = CurrentPoint
+        Lower[LowerCount] = P
     end
-    
-    for I = #Points, 1, -1 do
-        local CurrentPoint = Points[I]
-        while UpperCount >= 2 and 
-              CrossProduct2D(UpperHull[UpperCount - 1], UpperHull[UpperCount], CurrentPoint) <= 0 do
-            UpperHull[UpperCount] = nil
+
+    for Index = Count, 1, -1 do
+        local P = Points[Index]
+        while UpperCount >= 2 and CrossProduct2D(Upper[UpperCount - 1], Upper[UpperCount], P) <= 0 do
+            Upper[UpperCount] = nil
             UpperCount -= 1
         end
         UpperCount += 1
-        UpperHull[UpperCount] = CurrentPoint
+        Upper[UpperCount] = P
     end
-    
-    local Hull = {}
+
+    local Hull      = {}
     local HullCount = 0
-    for I = 1, LowerCount - 1 do 
+
+    for Index = 1, LowerCount - 1 do
         HullCount += 1
-        Hull[HullCount] = LowerHull[I]
+        Hull[HullCount] = Lower[Index]
     end
-    for I = 1, UpperCount - 1 do 
+    for Index = 1, UpperCount - 1 do
         HullCount += 1
-        Hull[HullCount] = UpperHull[I]
+        Hull[HullCount] = Upper[Index]
     end
-    
-    if HullCount > 0 then 
-        Hull[HullCount + 1] = Hull[1] 
+
+    if HullCount > 0 then
+        Hull[HullCount + 1] = Hull[1]
     end
-    
+
     return Hull
 end
 
-local function PointInPolygon(PointX, PointY, Polygon, BoundingBox)
-    if PointX < BoundingBox.MinX or PointX > BoundingBox.MaxX or 
-       PointY < BoundingBox.MinY or PointY > BoundingBox.MaxY then 
-        return false 
+local function PointInPolygon(PX, PY, Polygon, BBox)
+    if PX < BBox.MinX or PX > BBox.MaxX or PY < BBox.MinY or PY > BBox.MaxY then
+        return false
     end
-    
-    local IsInside = false
-    local PreviousVertexIndex = #Polygon
-    
-    for CurrentVertexIndex = 1, #Polygon do
-        local CurrentVertex = Polygon[CurrentVertexIndex]
-        local PreviousVertex = Polygon[PreviousVertexIndex]
-        
-        if ((CurrentVertex.Y > PointY) ~= (PreviousVertex.Y > PointY)) and 
-           (PointX < (PreviousVertex.X - CurrentVertex.X) * (PointY - CurrentVertex.Y) / 
-                     (PreviousVertex.Y - CurrentVertex.Y) + CurrentVertex.X) then
-            IsInside = not IsInside
+
+    local Inside  = false
+    local PrevIdx = #Polygon
+
+    for CurrIdx = 1, #Polygon do
+        local Curr = Polygon[CurrIdx]
+        local Prev = Polygon[PrevIdx]
+
+        if (Curr.Y > PY) ~= (Prev.Y > PY) and
+           PX < (Prev.X - Curr.X) * (PY - Curr.Y) / (Prev.Y - Curr.Y) + Curr.X then
+            Inside = not Inside
         end
-        PreviousVertexIndex = CurrentVertexIndex
+
+        PrevIdx = CurrIdx
     end
-    
-    return IsInside
+
+    return Inside
 end
 
 local function LineSegmentIntersection(P1X, P1Y, P2X, P2Y, P3X, P3Y, P4X, P4Y)
-    local Denominator = (P4Y - P3Y) * (P2X - P1X) - (P4X - P3X) * (P2Y - P1Y)
-    if math.abs(Denominator) < 1e-5 then return nil end
-    
-    local TNumerator = ((P4X - P3X) * (P1Y - P3Y) - (P4Y - P3Y) * (P1X - P3X))
-    local UNumerator = ((P2X - P1X) * (P1Y - P3Y) - (P2Y - P1Y) * (P1X - P3X))
-    
-    local T = TNumerator / Denominator
-    local U = UNumerator / Denominator
-    
-    if T >= 0 and T <= 1 and U >= 0 and U <= 1 then 
-        return T 
+    local Denom = (P4Y - P3Y) * (P2X - P1X) - (P4X - P3X) * (P2Y - P1Y)
+    if math.abs(Denom) < 1e-5 then return nil end
+
+    local T = ((P4X - P3X) * (P1Y - P3Y) - (P4Y - P3Y) * (P1X - P3X)) / Denom
+    local U = ((P2X - P1X) * (P1Y - P3Y) - (P2Y - P1Y) * (P1X - P3X)) / Denom
+
+    if T >= 0 and T <= 1 and U >= 0 and U <= 1 then
+        return T
     end
-    return nil
 end
 
 local function ProjectPartToScreen(Part)
-    local Position = Part.Position
+    local Position    = Part.Position
     local RightVector = Part.RightVector
-    local UpVector = Part.UpVector
-    local LookVector = Part.LookVector
-    
+    local UpVector    = Part.UpVector
+    local LookVector  = Part.LookVector
+
     local PX, PY, PZ = Position.X, Position.Y, Position.Z
-    
+
     local Size = Part.Size
-    local HalfX = Size.X * 0.5
-    local HalfY = Size.Y * 0.5
-    local HalfZ = Size.Z * 0.5
-    
-    local Corners = {
-        vector.create(HalfX, HalfY, HalfZ),
-        vector.create(HalfX, HalfY, -HalfZ),
-        vector.create(HalfX, -HalfY, HalfZ),
-        vector.create(HalfX, -HalfY, -HalfZ),
-        vector.create(-HalfX, HalfY, HalfZ),
-        vector.create(-HalfX, HalfY, -HalfZ),
-        vector.create(-HalfX, -HalfY, HalfZ),
-        vector.create(-HalfX, -HalfY, -HalfZ)
-    }
-    
+    local HX   = Size.X * 0.5
+    local HY   = Size.Y * 0.5
+    local HZ   = Size.Z * 0.5
+
+    local Viewport = Camera.ViewportSize
+    local MaxX     = Viewport.X
+    local MaxY     = Viewport.Y
+
     local ScreenPoints = {}
-    local ViewportSize = Camera.ViewportSize
-    local MaxX = ViewportSize.X
-    local MaxY = ViewportSize.Y
-    
-    for CornerIndex = 1, 8 do
-        local LocalCorner = Corners[CornerIndex]
-        
-        local WorldX = PX + RightVector.X * LocalCorner.X + UpVector.X * LocalCorner.Y + LookVector.X * LocalCorner.Z
-        local WorldY = PY + RightVector.Y * LocalCorner.X + UpVector.Y * LocalCorner.Y + LookVector.Y * LocalCorner.Z
-        local WorldZ = PZ + RightVector.Z * LocalCorner.X + UpVector.Z * LocalCorner.Y + LookVector.Z * LocalCorner.Z
-        
-        local WorldPosition = vector.create(WorldX, WorldY, WorldZ)
-        local ScreenPosition, IsVisible = Camera:WorldToScreenPoint(WorldPosition)
-        
-        local ScreenX = ScreenPosition.X
-        local ScreenY = ScreenPosition.Y
-        
-        if ScreenX > -100 and ScreenX < MaxX + 100 and ScreenY > -100 and ScreenY < MaxY + 100 then
-            table.insert(ScreenPoints, vector.create(ScreenX, ScreenY))
+    local PointCount   = 0
+
+    local SignX = HX
+    for _ = 1, 2 do
+        local SignY = HY
+        for _ = 1, 2 do
+            local SignZ = HZ
+            for _ = 1, 2 do
+                local WX = PX + RightVector.X * SignX + UpVector.X * SignY + LookVector.X * SignZ
+                local WY = PY + RightVector.Y * SignX + UpVector.Y * SignY + LookVector.Y * SignZ
+                local WZ = PZ + RightVector.Z * SignX + UpVector.Z * SignY + LookVector.Z * SignZ
+
+                local Screen  = Camera:WorldToScreenPoint(vector.create(WX, WY, WZ))
+                local SX, SY  = Screen.X, Screen.Y
+
+                if SX > -100 and SX < MaxX + 100 and SY > -100 and SY < MaxY + 100 then
+                    PointCount += 1
+                    ScreenPoints[PointCount] = vector.create(SX, SY)
+                end
+
+                SignZ = -SignZ
+            end
+            SignY = -SignY
         end
+        SignX = -SignX
     end
-    
+
     return ScreenPoints
 end
 
 local function IsOuterEdge(EdgeStart, EdgeEnd, PolygonIndex, AllPolygons)
-    local Tolerance = 0.1
-    
+    local SX, SY = EdgeStart.X, EdgeStart.Y
+    local EX, EY = EdgeEnd.X, EdgeEnd.Y
+
     for OtherIndex = 1, #AllPolygons do
-        if OtherIndex ~= PolygonIndex then
-            local OtherVertices = AllPolygons[OtherIndex].Vertices
-            
-            for VI = 1, #OtherVertices - 1 do
-                local V1 = OtherVertices[VI]
-                local V3 = OtherVertices[VI + 1]
-                
-                local SameDirection = (math.abs(V1.X - EdgeStart.X) < Tolerance and math.abs(V1.Y - EdgeStart.Y) < Tolerance and math.abs(V3.X - EdgeEnd.X) < Tolerance and math.abs(V3.Y - EdgeEnd.Y) < Tolerance)
-                local ReverseDirection = (math.abs(V1.X - EdgeEnd.X) < Tolerance and math.abs(V1.Y - EdgeEnd.Y) < Tolerance and math.abs(V3.X - EdgeStart.X) < Tolerance and math.abs(V3.Y - EdgeStart.Y) < Tolerance)
-                
-                if SameDirection or ReverseDirection then return false end
-            end
+        if OtherIndex == PolygonIndex then continue end
+
+        local Verts = AllPolygons[OtherIndex].Vertices
+
+        for VI = 1, #Verts - 1 do
+            local V1 = Verts[VI]
+            local V2 = Verts[VI + 1]
+
+            local SameDir    = math.abs(V1.X - SX) < EDGE_TOLERANCE and math.abs(V1.Y - SY) < EDGE_TOLERANCE
+                           and math.abs(V2.X - EX) < EDGE_TOLERANCE and math.abs(V2.Y - EY) < EDGE_TOLERANCE
+            local ReverseDir = math.abs(V1.X - EX) < EDGE_TOLERANCE and math.abs(V1.Y - EY) < EDGE_TOLERANCE
+                           and math.abs(V2.X - SX) < EDGE_TOLERANCE and math.abs(V2.Y - SY) < EDGE_TOLERANCE
+
+            if SameDir or ReverseDir then return false end
         end
     end
-    
+
     return true
 end
 
 local function GetNormalVector(P1, P2)
-    local Dx = P2.X - P1.X
-    local Dy = P2.Y - P1.Y
-    local Length = math.sqrt(Dx * Dx + Dy * Dy)
-    if Length < 0.001 then return vector.create(0, 0) end
-    return vector.create(-Dy / Length, Dx / Length)
+    local Dx  = P2.X - P1.X
+    local Dy  = P2.Y - P1.Y
+    local Len = math.sqrt(Dx * Dx + Dy * Dy)
+    if Len < 0.001 then return vector.create(0, 0) end
+    return vector.create(-Dy / Len, Dx / Len)
 end
 
 local function GetPartsFromTarget(Target)
     local Parts = {}
-    
+    local Count = 0
+
+    local function Accept(Part)
+        if Part:IsA("BasePart")
+            and Part.Transparency < 1
+            and Part.Name:match("%a") then
+            Count += 1
+            Parts[Count] = Part
+        end
+    end
+
     if typeof(Target) == "Instance" then
-        if Target.ClassName == "Model" then
+        if Target:IsA("Model") then
             for _, Child in ipairs(Target:GetChildren()) do
-                if (Child.ClassName == "Part" or Child.ClassName == "MeshPart" or Child.ClassName == "UnionOperation") and Child.Transparency < 1 then
-                    table.insert(Parts, Child)
-                end
+                Accept(Child)
             end
-        elseif Target.ClassName == "Part" or Target.ClassName == "MeshPart" or Target.ClassName == "UnionOperation" then
-            if Target.Transparency < 1 then
-                table.insert(Parts, Target)
-            end
+        else
+            Accept(Target)
         end
     elseif type(Target) == "table" then
         for _, Part in ipairs(Target) do
-            if typeof(Part) == "Instance" and (Part.ClassName == "Part" or Part.ClassName == "MeshPart" or Part.ClassName == "UnionOperation") and Part.Transparency < 1 then
-                table.insert(Parts, Part)
+            if typeof(Part) == "Instance" then
+                Accept(Part)
             end
         end
     end
-    
+
     return Parts
 end
 
 local function Highlight(Color, Target, Options)
     Options = Options or {}
-    
-    local ShowOutline = Options.Outline ~= false
-    local OutlineColor = Options.OutlineColor or Color3.fromRGB(0, 0, 0)
+
+    local ShowOutline      = Options.Outline ~= false
+    local OutlineColor     = Options.OutlineColor or Color3.fromRGB(0, 0, 0)
     local OutlineThickness = Options.OutlineThickness or 1
-    
-    local ShowInline = Options.Inline or false
-    local InlineColor = Options.InlineColor or OutlineColor
+
+    local ShowInline      = Options.Inline or false
+    local InlineColor     = Options.InlineColor or OutlineColor
     local InlineThickness = Options.InlineThickness or OutlineThickness
-    
-    local ShowFill = Options.Fill or false
-    local FillColor = Options.FillColor or Color
+
+    local ShowFill    = Options.Fill or false
+    local FillColor   = Options.FillColor or Color
     local FillOpacity = Options.FillOpacity or 1
-    
+
     local MainThickness = Options.MainThickness or 1
-    
-    for I = 1, #OutlineSegments do
-        OutlineSegments[I] = nil
+
+    -- Clear segment buffer
+    for Index = 1, #OutlineSegments do
+        OutlineSegments[Index] = nil
     end
     local SegmentCount = 0
-    
+
     local ValidParts = GetPartsFromTarget(Target)
-    local PartCount = #ValidParts
-    
+    local PartCount  = #ValidParts
     if PartCount == 0 then return end
-    
+
+    -- Project each part into a screen-space convex polygon
     local PolygonCount = 0
-    
-    for PartIndex = 1, PartCount do
-        local Part = ValidParts[PartIndex]
-        local ScreenPoints = ProjectPartToScreen(Part)
-        
-        if ScreenPoints and #ScreenPoints >= 3 then
+
+    for Index = 1, PartCount do
+        local ScreenPoints = ProjectPartToScreen(ValidParts[Index])
+
+        if #ScreenPoints >= 3 then
             local Hull = ComputeConvexHull(ScreenPoints)
-            
-            local MinX, MinY = 100000, 100000
-            local MaxX, MaxY = -100000, -100000
-            
-            for VertexIndex = 1, #Hull do
-                local Vertex = Hull[VertexIndex]
-                if Vertex.X < MinX then MinX = Vertex.X end
-                if Vertex.X > MaxX then MaxX = Vertex.X end
-                if Vertex.Y < MinY then MinY = Vertex.Y end
-                if Vertex.Y > MaxY then MaxY = Vertex.Y end
+
+            local MinX, MinY =  1e5,  1e5
+            local MaxX, MaxY = -1e5, -1e5
+
+            for _, V in ipairs(Hull) do
+                if V.X < MinX then MinX = V.X end
+                if V.X > MaxX then MaxX = V.X end
+                if V.Y < MinY then MinY = V.Y end
+                if V.Y > MaxY then MaxY = V.Y end
             end
-            
+
             PolygonCount += 1
             ScreenPolygons[PolygonCount] = {
                 Vertices = Hull,
-                BBox = { MinX = MinX, MinY = MinY, MaxX = MaxX, MaxY = MaxY },
-                Part = Part
+                BBox     = {MinX = MinX, MinY = MinY, MaxX = MaxX, MaxY = MaxY},
             }
         end
     end
-    
-    for ClearIndex = PolygonCount + 1, #ScreenPolygons do 
-        ScreenPolygons[ClearIndex] = nil 
+
+    for Index = PolygonCount + 1, #ScreenPolygons do
+        ScreenPolygons[Index] = nil
     end
-    
+
     if PolygonCount == 0 then return end
-    
+
+    -- Fill pass
     if ShowFill then
-        for PolygonIndex = 1, PolygonCount do
-            local Vertices = ScreenPolygons[PolygonIndex].Vertices
-            if #Vertices >= 3 then
-                for I = 2, #Vertices - 2 do
-                    DrawingImmediate.FilledTriangle(
-                        Vertices[1], Vertices[I], Vertices[I + 1],
-                        FillColor, FillOpacity
-                    )
+        for Index = 1, PolygonCount do
+            local Verts  = ScreenPolygons[Index].Vertices
+            local VCount = #Verts
+            if VCount >= 3 then
+                for VI = 2, VCount - 2 do
+                    DrawingImmediate.FilledTriangle(Verts[1], Verts[VI], Verts[VI + 1], FillColor, FillOpacity)
                 end
             end
         end
     end
-    
+
+    -- Outline pass — collect visible outer edge segments, skipping shared interior edges
     for PolygonIndex = 1, PolygonCount do
-        local CurrentPolygon = ScreenPolygons[PolygonIndex]
-        local CurrentVertices = CurrentPolygon.Vertices
-        local CurrentBBox = CurrentPolygon.BBox
-        local VertexCount = #CurrentVertices
-        
+        local Polygon   = ScreenPolygons[PolygonIndex]
+        local Verts     = Polygon.Vertices
+        local BBox      = Polygon.BBox
+        local VertCount = #Verts
+
+        -- Gather overlapping polygons as potential blockers
         local BlockerCount = 0
         for OtherIndex = 1, PolygonCount do
-            if PolygonIndex ~= OtherIndex then
-                local OtherBBox = ScreenPolygons[OtherIndex].BBox
-                if not (CurrentBBox.MinX > OtherBBox.MaxX or CurrentBBox.MaxX < OtherBBox.MinX or 
-                       CurrentBBox.MinY > OtherBBox.MaxY or CurrentBBox.MaxY < OtherBBox.MinY) then
-                    BlockerCount += 1
-                    BlockingPolygons[BlockerCount] = ScreenPolygons[OtherIndex]
-                end
+            if OtherIndex == PolygonIndex then continue end
+            local OtherBBox = ScreenPolygons[OtherIndex].BBox
+            if not (BBox.MinX > OtherBBox.MaxX or BBox.MaxX < OtherBBox.MinX or
+                    BBox.MinY > OtherBBox.MaxY or BBox.MaxY < OtherBBox.MinY) then
+                BlockerCount += 1
+                BlockingPolygons[BlockerCount] = ScreenPolygons[OtherIndex]
             end
         end
-        
-        for VertexIndex = 1, VertexCount - 1 do
-            local VertexStart = CurrentVertices[VertexIndex]
-            local VertexEnd = CurrentVertices[VertexIndex + 1]
-            
-            if IsOuterEdge(VertexStart, VertexEnd, PolygonIndex, ScreenPolygons) then
-                local StartX, StartY = VertexStart.X, VertexStart.Y
-                local EndX, EndY = VertexEnd.X, VertexEnd.Y
-                
-                local EdgeMinX = math.min(StartX, EndX)
-                local EdgeMaxX = math.max(StartX, EndX)
-                local EdgeMinY = math.min(StartY, EndY)
-                local EdgeMaxY = math.max(StartY, EndY)
-                
-                local CutCount = 2
-                IntersectionCuts[1] = 0
-                IntersectionCuts[2] = 1
-                for ClearIndex = 3, #IntersectionCuts do 
-                    IntersectionCuts[ClearIndex] = nil 
+
+        for VI = 1, VertCount - 1 do
+            local VStart = Verts[VI]
+            local VEnd   = Verts[VI + 1]
+
+            if not IsOuterEdge(VStart, VEnd, PolygonIndex, ScreenPolygons) then continue end
+
+            local SX, SY = VStart.X, VStart.Y
+            local EX, EY = VEnd.X,   VEnd.Y
+
+            local EdgeMinX = math.min(SX, EX)
+            local EdgeMaxX = math.max(SX, EX)
+            local EdgeMinY = math.min(SY, EY)
+            local EdgeMaxY = math.max(SY, EY)
+
+            -- Seed cut list with edge endpoints
+            local CutCount      = 2
+            IntersectionCuts[1] = 0
+            IntersectionCuts[2] = 1
+            for Index = 3, #IntersectionCuts do
+                IntersectionCuts[Index] = nil
+            end
+
+            -- Find all intersection T values against blocker edges
+            for BI = 1, BlockerCount do
+                local Blocker     = BlockingPolygons[BI]
+                local BlockerBBox = Blocker.BBox
+
+                if EdgeMinX > BlockerBBox.MaxX or EdgeMaxX < BlockerBBox.MinX or
+                   EdgeMinY > BlockerBBox.MaxY or EdgeMaxY < BlockerBBox.MinY then
+                    continue
                 end
-                
-                for BlockerIndex = 1, BlockerCount do
-                    local Blocker = BlockingPolygons[BlockerIndex]
-                    local BlockerBBox = Blocker.BBox
-                    
-                    if not (EdgeMinX > BlockerBBox.MaxX or EdgeMaxX < BlockerBBox.MinX or 
-                           EdgeMinY > BlockerBBox.MaxY or EdgeMaxY < BlockerBBox.MinY) then
-                        
-                        local BlockerVertices = Blocker.Vertices
-                        for BlockerEdgeIndex = 1, #BlockerVertices - 1 do
-                            local BlockerStart = BlockerVertices[BlockerEdgeIndex]
-                            local BlockerEnd = BlockerVertices[BlockerEdgeIndex + 1]
-                            
-                            local IntersectionT = LineSegmentIntersection(
-                                StartX, StartY, EndX, EndY,
-                                BlockerStart.X, BlockerStart.Y, BlockerEnd.X, BlockerEnd.Y
-                            )
-                            
-                            if IntersectionT then
-                                CutCount += 1
-                                IntersectionCuts[CutCount] = IntersectionT
-                            end
-                        end
+
+                local BlockerVerts = Blocker.Vertices
+                for BVI = 1, #BlockerVerts - 1 do
+                    local T = LineSegmentIntersection(
+                        SX, SY, EX, EY,
+                        BlockerVerts[BVI].X, BlockerVerts[BVI].Y,
+                        BlockerVerts[BVI + 1].X, BlockerVerts[BVI + 1].Y
+                    )
+                    if T then
+                        CutCount += 1
+                        IntersectionCuts[CutCount] = T
                     end
                 end
-                
-                table.sort(IntersectionCuts)
-                
-                local PreviousCut = IntersectionCuts[1]
-                for CutIndex = 2, CutCount do
-                    local CurrentCut = IntersectionCuts[CutIndex]
-                    
-                    if CurrentCut > PreviousCut + 0.001 then
-                        local MidpointT = (PreviousCut + CurrentCut) * 0.5
-                        local MidpointX = StartX + (EndX - StartX) * MidpointT
-                        local MidpointY = StartY + (EndY - StartY) * MidpointT
-                        
-                        local IsOccluded = false
-                        for BlockerIndex = 1, BlockerCount do
-                            if PointInPolygon(MidpointX, MidpointY, BlockingPolygons[BlockerIndex].Vertices,
-                                            BlockingPolygons[BlockerIndex].BBox) then
-                                IsOccluded = true
-                                break
-                            end
+            end
+
+            table.sort(IntersectionCuts)
+
+            -- Walk sub-segments, emit those not occluded by a blocker
+            local PrevCut = IntersectionCuts[1]
+            for CI = 2, CutCount do
+                local CurrCut = IntersectionCuts[CI]
+
+                if CurrCut > PrevCut + 0.001 then
+                    local MidT = (PrevCut + CurrCut) * 0.5
+                    local MidX = SX + (EX - SX) * MidT
+                    local MidY = SY + (EY - SY) * MidT
+
+                    local Occluded = false
+                    for BI = 1, BlockerCount do
+                        if PointInPolygon(MidX, MidY, BlockingPolygons[BI].Vertices, BlockingPolygons[BI].BBox) then
+                            Occluded = true
+                            break
                         end
-                        
-                        if not IsOccluded then
-                            local SegStart = vector.create(StartX + (EndX - StartX) * PreviousCut, StartY + (EndY - StartY) * PreviousCut)
-                            local SegEnd = vector.create(StartX + (EndX - StartX) * CurrentCut, StartY + (EndY - StartY) * CurrentCut)
-                            
-                            SegmentCount += 1
-                            OutlineSegments[SegmentCount] = { Start = SegStart, End = SegEnd }
-                        end
-                        
-                        PreviousCut = CurrentCut
+                    end
+
+                    if not Occluded then
+                        SegmentCount += 1
+                        OutlineSegments[SegmentCount] = {
+                            Start = vector.create(SX + (EX - SX) * PrevCut, SY + (EY - SY) * PrevCut),
+                            End   = vector.create(SX + (EX - SX) * CurrCut, SY + (EY - SY) * CurrCut),
+                        }
                     end
                 end
+
+                PrevCut = CurrCut
             end
         end
     end
-    
-    for I = 1, SegmentCount do
-        local Segment = OutlineSegments[I]
-        local Normal = GetNormalVector(Segment.Start, Segment.End)
-        
+
+    -- Draw pass
+    for Index = 1, SegmentCount do
+        local Seg    = OutlineSegments[Index]
+        local Normal = GetNormalVector(Seg.Start, Seg.End)
+
         if ShowOutline then
-            local OuterStart = vector.create(
-                Segment.Start.X + Normal.X * OutlineThickness,
-                Segment.Start.Y + Normal.Y * OutlineThickness
+            DrawingImmediate.Line(
+                vector.create(Seg.Start.X + Normal.X * OutlineThickness, Seg.Start.Y + Normal.Y * OutlineThickness),
+                vector.create(Seg.End.X   + Normal.X * OutlineThickness, Seg.End.Y   + Normal.Y * OutlineThickness),
+                OutlineColor, 1, 1, OutlineThickness
             )
-            local OuterEnd = vector.create(
-                Segment.End.X + Normal.X * OutlineThickness,
-                Segment.End.Y + Normal.Y * OutlineThickness
-            )
-            DrawingImmediate.Line(OuterStart, OuterEnd, OutlineColor, 1, 1, OutlineThickness)
         end
-        
+
         if ShowInline then
-            local InnerStart = vector.create(
-                Segment.Start.X - Normal.X * InlineThickness,
-                Segment.Start.Y - Normal.Y * InlineThickness
+            DrawingImmediate.Line(
+                vector.create(Seg.Start.X - Normal.X * InlineThickness, Seg.Start.Y - Normal.Y * InlineThickness),
+                vector.create(Seg.End.X   - Normal.X * InlineThickness, Seg.End.Y   - Normal.Y * InlineThickness),
+                InlineColor, 1, 1, InlineThickness
             )
-            local InnerEnd = vector.create(
-                Segment.End.X - Normal.X * InlineThickness,
-                Segment.End.Y - Normal.Y * InlineThickness
-            )
-            DrawingImmediate.Line(InnerStart, InnerEnd, InlineColor, 1, 1, InlineThickness)
         end
-        
-        DrawingImmediate.Line(
-            Segment.Start, Segment.End, Color, 1, 1, MainThickness
-        )
+
+        DrawingImmediate.Line(Seg.Start, Seg.End, Color, 1, 1, MainThickness)
     end
 end
 
