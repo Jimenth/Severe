@@ -188,7 +188,6 @@ local function GetPartsFromTarget(Target)
 
     local function Accept(Part)
         if Part:IsA("BasePart")
-            and Part.Transparency < 1
             and Part.Name:match("%a") then
             Count += 1
             Parts[Count] = Part
