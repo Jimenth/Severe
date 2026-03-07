@@ -1,10 +1,6 @@
 --!optimize 2
 local Module = loadstring(game:HttpGet("https://raw.githubusercontent.com/Jimenth/Severe/refs/heads/main/Modules/Highlight.lua"))();
 task.wait(2)
-Bytecode = game:HttpGet("https://raw.githubusercontent.com/DCHARLESAKAMRGREEN/Severe-Luas/main/Libraries/Pseudosynonym.lua")
-local Load = luau.load(Bytecode)
-local Library = Load()
-task.wait(2)
 
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
@@ -17,15 +13,6 @@ local ExitLocations = Workspace:FindFirstChild("NoCollision") and Workspace.NoCo
 
 local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
-
-local Version = "1.0.0"
-
-local Window = Library:CreateWindow({
-    Title = "Project Dih | "..  Workspace:GetAttribute("MapName")..  " | "..  Version,
-    Tag = LocalPlayer.Name,
-    Keybind = "Insert",
-    AutoShow = true
-})
 
 local Interface = {
     Dimensions = {
@@ -480,53 +467,7 @@ local Items = {
     }
 }
 
-local VisualsTab = Window:AddTab({ Name = "Visuals" })
-local Visuals = VisualsTab:AddContainer({ Name = "Main", Side = "Left", AutoSize = true })
-local MainDrops = Visuals:AddTab("Drops")
-local MainCrates = Visuals:AddTab("Crates")
-local MainCorpses = Visuals:AddTab("Corpses")
-
-local RenderDrops = MainDrops:AddToggle({ Name = "Enabled", Value = false, Tooltip = "Renders All Item Drops" })
-local RenderDropsHighlight = MainDrops:AddToggle({ Name = "Highlight", Value = false, Tooltip = "Enable Highlights for Drops" })
-local DropDistance = MainDrops:AddSlider({ Name = "Distance", Min = 0, Max = 1500, Default = 150, Rounding = 5 })
-local DropFilter = MainDrops:AddDropdown({ Name = "Item Filter", Values = {"Weapons", "Attachments", "Magazines", "Ammo", "Medical", "Armor", "Clothing", "Visors", "Optics", "Melee", "Grenades", "Deployables", "Food", "Keys", "Tools", "Materials", "Electronics", "Valuables", "Maps", "Special"}, Default = {"Weapons"}, Multi = true })
-
-local RenderCrates = MainCrates:AddToggle({ Name = "Enabled", Value = false, Tooltip = "Render All Loot Crates" })
-local RenderCratesHighlight = MainCrates:AddToggle({ Name = "Highlight", Value = false, Tooltip = "Enable Highlights for Crates" })
-local CrateDistance = MainCrates:AddSlider({ Name = "Distance", Min = 0, Max = 1500, Default = 150, Rounding = 5 })
-local CrateFilter = MainCrates:AddDropdown({ Name = "Crate Filter", Values = {"Military", "Civilian", "EDF", "Other"}, Default = {"Civilian"}, Multi = true })
-MainCrates:AddSeparator()
-local DisplayInventory = MainCrates:AddToggle({ Name = "Display Inventory", Value = false, Tooltip = "Show items inside crates" })
-local InventoryFilter = MainCrates:AddDropdown({ Name = "Inventory Filter", Values = {"Weapons", "Attachments", "Magazines", "Ammo", "Medical", "Armor", "Clothing", "Visors", "Optics", "Melee", "Grenades", "Deployables", "Food", "Keys", "Tools", "Materials", "Electronics", "Valuables", "Maps", "Special"}, Default = {"Weapons"}, Multi = true })
-
-local RenderCorpses = MainCorpses:AddToggle({ Name = "Enabled", Value = false, Tooltip = "Render All Player Corpses" })
-local RenderCorpsesHighlight = MainCorpses:AddToggle({ Name = "Highlight", Value = false, Tooltip = "Performance Intensive" })
-local CorpseDistance = MainCorpses:AddSlider({ Name = "Distance", Min = 0, Max = 1500, Default = 150, Rounding = 5 })
-
-local VehiclesContainer = VisualsTab:AddContainer({ Name = "Vehicles", Side = "Right", AutoSize = true })
-local MainVehicles = VehiclesContainer:AddTab("Vehicles")
-local RenderVehicles = MainVehicles:AddToggle({ Name = "Enabled", Value = false, Tooltip = "Render All Vehicles" })
-local VehicleDistance = MainVehicles:AddSlider({ Name = "Distance", Min = 0, Max = 2500, Default = 400, Rounding = 5 })
-
-local ExitsContainer = VisualsTab:AddContainer({ Name = "Exits", Side = "Right", AutoSize = true })
-local MainExits = ExitsContainer:AddTab("Exits")
-local RenderExits = MainExits:AddToggle({ Name = "Enabled", Value = false, Tooltip = "Render All Exit Locations" })
-local ExitDistance = MainExits:AddSlider({ Name = "Distance", Min = 0, Max = 2500, Default = 500, Rounding = 5 })
-
-local SettingsTab = Window:AddTab({ Name = "Settings" })
-local MenuContainer = SettingsTab:AddContainer({ Name = "Menu", Side = "Left", AutoSize = true })
-
-MenuContainer:AddMenuBind({})
-MenuContainer:AddSeparator()
-
-MenuContainer:AddWatermark({
-    Watermark = "Project Dih | ".. Version.. " | "..  Workspace:GetAttribute("MapName"),
-    ShowFPS = true
-})
-
-MenuContainer:AddKeybindList({})
-MenuContainer:AddButton({ Name = "Copy Discord Link", Callback = function() setclipboard("discord.gg/severe1") end })
-MenuContainer:AddButton({ Name = "Unload", Unsafe = true, Callback = function() Library:Unload() end })
+local Settings = _G.Settings
 
 local Stored = {
     Drops  = {},
@@ -873,7 +814,7 @@ local function UpdateClient()
 end
 
 local function CrateValid(Name)
-    local Selected = CrateFilter.Value
+    local Selected = Settings.Visuals.Crates.Filter
 
     if not next(Selected) then
         return true
@@ -896,7 +837,7 @@ local function CrateValid(Name)
 end
 
 local function ItemValid(Name)
-    local Selected = DropFilter.Value
+    local Selected = Settings.Visuals.Drops.Filter
 
     if not next(Selected) then
         return true
@@ -919,7 +860,7 @@ local function ItemValid(Name)
 end
 
 local function CrateItemValid(Name)
-    local Selected = InventoryFilter.Value
+    local Selected = Settings.Visuals.Crates.InventoryFilter
 
     if not next(Selected) then
         return true
@@ -953,8 +894,8 @@ local function Cache()
         end
     end
     
-    if RenderDrops.Value then
-        local Maximum = DropDistance.Value
+    if Settings.Visuals.Drops.Enabled then
+        local Maximum = Settings.Visuals.Drops.Distance
         Process(true, Stored.Drops, Maximum, function(Drop) return ItemValid(Drop.Name) end)
         
         if Dropped then
@@ -969,8 +910,8 @@ local function Cache()
         end
     end
     
-    if RenderCrates.Value then
-        local Maximum = CrateDistance.Value
+    if Settings.Visuals.Crates.Enabled then
+        local Maximum = Settings.Visuals.Crates.Distance
         
         for Crate, Data in pairs(Stored.Crates) do
             if not Crate.Parent or not CrateValid(Crate.Name) then
@@ -981,7 +922,7 @@ local function Cache()
                     Stored.Crates[Crate] = nil
                 else
                     Data.Inventory = {}
-                    if DisplayInventory.Value then
+                    if Settings.Visuals.Crates.DisplayInventory then
                         local Inv = Crate:FindFirstChild("Inventory")
                         if Inv then
                             for _, Item in ipairs(Inv:GetChildren()) do
@@ -1004,7 +945,7 @@ local function Cache()
                         local Name = Crate:GetAttribute("DisplayName") or Crate.Name
                         if Distance <= Maximum and CrateValid(Crate.Name) then
                             local FilteredItems = {}
-                            if DisplayInventory.Value then
+                            if Settings.Visuals.Crates.DisplayInventory then
                                 local Inv = Crate:FindFirstChild("Inventory")
                                 if Inv then
                                     for _, Item in ipairs(Inv:GetChildren()) do
@@ -1032,8 +973,8 @@ local function Cache()
         end
     end
     
-    if RenderCorpses.Value then
-        local Maximum = CorpseDistance.Value
+    if Settings.Visuals.Corpses.Enabled then
+        local Maximum = Settings.Visuals.Corpses.Distance
         Process(true, Stored.Corpses, Maximum, nil)
         
         if Dropped then
@@ -1052,8 +993,8 @@ local function Cache()
         end
     end
     
-    if RenderVehicles.Value then
-        local Maximum = VehicleDistance.Value
+    if Settings.Visuals.Vehicles.Enabled then
+        local Maximum = Settings.Visuals.Vehicles.Distance
         
         for Vehicle, Data in pairs(Stored.Vehicles) do
             if not Vehicle.Parent then
@@ -1081,8 +1022,8 @@ local function Cache()
         end
     end
     
-    if RenderExits.Value then
-        local Maximum = ExitDistance.Value
+    if Settings.Visuals.Exits.Enabled then
+        local Maximum = Settings.Visuals.Exits.Distance
         Process(true, Stored.Exits, Maximum, nil)
         
         if ExitLocations then
@@ -1104,13 +1045,13 @@ end
 local function Render()
     if not Client.HumanoidRootPart then return end
     
-    if RenderDrops.Value then
+    if Settings.Visuals.Drops.Enabled then
         for _, Data in pairs(Stored.Drops) do
             local Object = Data.Object
             if Object and Object.Parent then
                 local Screen, OnScreen = Camera:WorldToScreenPoint(Object.Position)
                 if OnScreen then
-                    if RenderDropsHighlight.Value then
+                    if Settings.Visuals.Drops.Highlight then
                         Module.Highlight(Interface.Coloring.Border.Inner, Object, { Outline = false, OutlineColor = Color3.fromRGB(0, 0, 0), OutlineThickness = 1, Inline = false, InlineColor = Color3.fromRGB(0, 0, 0), InlineThickness = 1, Fill = true, FillColor = Interface.Coloring.Accent, FillOpacity = 1})
                     end
                     DrawingImmediate.OutlinedText(Screen, 13, Color3.fromRGB(255, 255, 255), 1, Data.Name, true, "Proggy")
@@ -1119,19 +1060,19 @@ local function Render()
         end
     end
 
-    if RenderCrates.Value then
+    if Settings.Visuals.Crates.Enabled then
         for _, Data in pairs(Stored.Crates) do
             local Object = Data.Object
             if Object and Object.Parent then
                 local Screen, OnScreen = Camera:WorldToScreenPoint(Object.Position)
                 if OnScreen then
-                    if RenderCratesHighlight.Value then
+                    if Settings.Visuals.Crates.Highlight then
                         Module.Highlight(Interface.Coloring.Border.Inner, Object, { Outline = false, OutlineColor = Color3.fromRGB(0, 0, 0), OutlineThickness = 1, Inline = false, InlineColor = Color3.fromRGB(0, 0, 0), InlineThickness = 1, Fill = true, FillColor = Interface.Coloring.Accent, FillOpacity = 1})
                     end
                     
                     DrawingImmediate.OutlinedText(Screen, 13, Color3.fromRGB(255, 255, 255), 1, Data.Name, true, "Proggy")
                     
-                    if DisplayInventory.Value and Data.Inventory and #Data.Inventory > 0 then
+                    if Settings.Visuals.Crates.DisplayInventory and Data.Inventory and #Data.Inventory > 0 then
                         local InventoryText = "[" .. table.concat(Data.Inventory, ", ") .. "]"
                         local InventoryScreen = Vector2.new(Screen.X, Screen.Y + 15)
                         DrawingImmediate.OutlinedText(InventoryScreen, 13, Color3.fromRGB(255, 255, 150), 1, InventoryText, true, "Proggy")
@@ -1141,13 +1082,13 @@ local function Render()
         end
     end
 
-    if RenderCorpses.Value then
+    if Settings.Visuals.Corpses.Enabled then
         for _, Data in pairs(Stored.Corpses) do
             local Object = Data.Object
             if Object and Object.Parent then
                 local Screen, OnScreen = Camera:WorldToScreenPoint(Object.Position)
                 if OnScreen then
-                    if RenderCorpsesHighlight.Value then
+                    if Settings.Visuals.Corpses.Highlight then
                         Module.Highlight(Interface.Coloring.Border.Inner, Data.Item, { Outline = false, OutlineColor = Color3.fromRGB(0, 0, 0), OutlineThickness = 1, Inline = false, InlineColor = Color3.fromRGB(0, 0, 0), InlineThickness = 1, Fill = true, FillColor = Interface.Coloring.Accent, FillOpacity = 1})
                     end
                     DrawingImmediate.OutlinedText(Screen, 13, Color3.fromRGB(255, 255, 255), 1, Data.Name..  "'s Corpse", true, "Proggy")
@@ -1156,7 +1097,7 @@ local function Render()
         end
     end
 
-    if RenderVehicles.Value then
+    if Settings.Visuals.Vehicles.Enabled then
         for _, Data in pairs(Stored.Vehicles) do
             local Object = Data.Object
             if Object and Object.Parent then
@@ -1168,7 +1109,7 @@ local function Render()
         end
     end
 
-    if RenderExits.Value then
+    if Settings.Visuals.Exits.Enabled then
         for _, Data in pairs(Stored.Exits) do
             local Object = Data.Object
             if Object and Object.Parent then
