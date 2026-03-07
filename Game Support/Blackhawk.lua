@@ -1,9 +1,12 @@
+--!optimize 2
 local Added = {}
+
 local Workspace = game:GetService("Workspace")
+local PlaceID = game.PlaceId
+
 local Closest
 local State = false
 local Excluded = nil
-local PlaceID = game.PlaceId
 
 local Places = {
     ["Openworld"] = 3701546109,
@@ -29,13 +32,12 @@ local function GetClosestPlayer()
 
     local ClosestModel = nil
     local ClosestDistance = math.huge
-    local CameraPosition = Camera.Position
 
     for _, Model in pairs(Workspace:GetChildren()) do
-        if Model.ClassName == "Model" and Model.Name == "Male" and IsPlayerModel(Model) then
+        if Model:IsA("Model") and Model.Name == "Male" and IsPlayerModel(Model) then
             local HumanoidRootPart = Model:FindFirstChild("Root")
             if HumanoidRootPart then
-                local Distance = vector.magnitude(HumanoidRootPart.Position - CameraPosition)
+                local Distance = vector.magnitude(HumanoidRootPart.Position - Camera.Position)
                 if Distance < ClosestDistance then
                     ClosestDistance = Distance
                     ClosestModel = Model
@@ -58,7 +60,7 @@ end
 local function GetBodyParts(Model)
     return {
         Head = Model:FindFirstChild("Head"),
-        UpperTorso = Model:FindFirstChild("UpperTorso"),
+        UpperTorso = Model:FindFirstChild("LowerTorso"),
         LowerTorso = Model:FindFirstChild("LowerTorso"),
 
         LeftUpperArm = Model:FindFirstChild("LeftUpperArm"),
@@ -161,44 +163,25 @@ end
 task.spawn(function()
     while true do
         task.wait(0.5)
-        
-        local HasWorldModel = CheckWorldModel()
-        local New = nil
-        
-        if not HasWorldModel then
-            New = GetClosestPlayer()
-        end
+        local New = GetClosestPlayer()
         
         if PlaceID == Places["Openworld"] then
-            if HasWorldModel then
-                State = false
-                Excluded = nil
-            else
-                State = true
-                Excluded = New
-            end
-            Closest = New
+            State = false
+            Excluded = nil
+            Closest = nil
         elseif PlaceID == Places["2V2"] or PlaceID == Places["5V5"] or PlaceID == Places["Ranked"] then
             State = false
             Excluded = nil
             Closest = New
-        elseif PlaceID == Places["Zombies"] then
-            if HasWorldModel then
-                State = false
-                Excluded = nil
-            else
-                State = true
-                Excluded = New
-            end
-            Closest = New
         else
-            if HasWorldModel then
-                State = true
-                Excluded = New
-            else
+            if CheckWorldModel() then
                 State = false
                 Excluded = nil
+            else
+                State = true
+                Excluded = New
             end
+            
             Closest = New
         end
     end
@@ -211,17 +194,19 @@ local function Update()
         pcall(function()
             if not Object then return end
             
-            if Object.ClassName == "Model" and (Object.Name == "Male" or (PlaceID == Places["Zombies"] and (Object.Name == "Zombie" or IsPlayerModel(Object)))) then
+            if Object:IsA("Model") and (Object.Name == "Male" or (PlaceID == Places["Zombies"] and (Object.Name == "Zombie" or IsPlayerModel(Object)))) then
                 local Key = tostring(Object)
                 if not Key then return end
+                
+                if PlaceID == Places["Openworld"] and Object.Name == "Male" and IsPlayerModel(Object) then
+                    return
+                end
                 
                 local Parts = GetBodyParts(Object)
 
                 if Parts and Parts.Head and Parts.HumanoidRootPart then
                     if State and Excluded and Object == Excluded then
-                        if PlaceID == Places["Zombies"] and IsPlayerModel(Object) then
-                            return
-                        elseif PlaceID ~= Places["Zombies"] then
+                        if PlaceID ~= Places["Zombies"] or IsPlayerModel(Object) then
                             return
                         end
                     end
@@ -259,11 +244,12 @@ local function Update()
             local Success, HumanoidRootPart = pcall(function() 
                 return Model:FindFirstChild("Root") 
             end)
-        
+            
             if not Success then HumanoidRootPart = nil end
-        
-            if not HumanoidRootPart or not Seen[Key] or not Model.Parent or (HumanoidRootPart and not HumanoidRootPart.Parent) then
-                remove_model_data(Key)
+            
+            if not HumanoidRootPart or not Seen[Key] then
+                pcall(function() remove_model_data(Key) end)
+                
                 Added[Key] = nil
             end
         end)
@@ -399,7 +385,7 @@ end
 
 task.spawn(function()
     while true do
-        task.wait(1 / 5)
+        task.wait(0.1)
         Update()
     
         local ID, Data = LocalPlayerData()
