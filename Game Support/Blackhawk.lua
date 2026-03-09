@@ -1,5 +1,14 @@
 --!optimize 2
-local Added = {}
+local Module = {
+    Functions = {},
+    Added = {},
+
+    LocalPlayer = {
+        Closest = nil,
+        State = false,
+        Excluded = nil,
+    }
+}
 
 local Workspace = game:GetService("Workspace")
 local PlaceID = game.PlaceId
@@ -16,15 +25,15 @@ local Places = {
     ["Ranked"] = 4524359706
 }
 
-local function IsPlayerModel(Model)
+Module.Functions.IsPlayerModel = function(Model)
     return Model:FindFirstChild("BillboardGui") ~= nil
 end
 
-local function IsZombieModel(Model) 
-    return Model.Name == "Zombie" 
+Module.Functions.IsZombieModel = function(Model)
+    return Model.Name == "Zombie"
 end
 
-local function GetClosestPlayer()
+Module.Functions.GetClosestPlayer = function()
     local Camera = Workspace:FindFirstChild("Camera")
     if not Camera then return nil end
 
@@ -34,7 +43,7 @@ local function GetClosestPlayer()
     local ClosestDistance = math.huge
 
     for _, Model in pairs(Workspace:GetChildren()) do
-        if Model:IsA("Model") and Model.Name == "Male" and IsPlayerModel(Model) then
+        if Model:IsA("Model") and Model.Name == "Male" and Module.Functions.IsPlayerModel(Model) then
             local HumanoidRootPart = Model:FindFirstChild("Root")
             if HumanoidRootPart then
                 local Distance = vector.magnitude(HumanoidRootPart.Position - Camera.Position)
@@ -49,7 +58,7 @@ local function GetClosestPlayer()
     return ClosestModel
 end
 
-local function CheckWorldModel()
+Module.Functions.CheckWorldModel = function()
     local Camera = Workspace:FindFirstChild("Camera")
     if not Camera then return false end
     
@@ -57,7 +66,7 @@ local function CheckWorldModel()
     return WorldModel ~= nil
 end
 
-local function GetBodyParts(Model)
+Module.Functions.GetBodyParts = function(Model)
     return {
         Head = Model:FindFirstChild("Head"),
         UpperTorso = Model:FindFirstChild("LowerTorso"),
@@ -83,11 +92,11 @@ local function GetBodyParts(Model)
     }
 end
 
-local function PlayerData(Model, Parts)
+Module.Functions.PlayerData = function(Model, Parts)
     local Data = {
         Username = tostring(Model),
-        Displayname = IsPlayerModel(Model) and "Player" or IsZombieModel(Model) and "Zombie" or "AI",
-        Userid = IsPlayerModel(Model) and 0 or -1,
+        Displayname = Module.Functions.IsPlayerModel(Model) and "Player" or Module.Functions.IsZombieModel(Model) and "Zombie" or "AI",
+        Userid = Module.Functions.IsPlayerModel(Model) and 0 or -1,
         Character = Model,
         PrimaryPart = Parts.Head,
         Humanoid = Parts.Head,
@@ -114,9 +123,9 @@ local function PlayerData(Model, Parts)
         BodyHeightScale = 1,
         RigType = 1,
         Toolname = "None",
-        Teamname = IsPlayerModel(Model) and "Players" or IsZombieModel(Model) and "Zombies" or "NPCs",
+        Teamname = Module.Functions.IsPlayerModel(Model) and "Players" or Module.Functions.IsZombieModel(Model) and "Zombies" or "NPCs",
         Whitelisted = false,
-        Archenemies = IsPlayerModel(Model) and true or false,
+        Archenemies = Module.Functions.IsPlayerModel(Model) and true or false,
         Aimbot_Part = Parts.Head,
         Aimbot_TP_Part = Parts.Head,
         Triggerbot_Part = Parts.Head,
@@ -163,7 +172,7 @@ end
 task.spawn(function()
     while true do
         task.wait(0.5)
-        local New = GetClosestPlayer()
+        local New = Module.Functions.GetClosestPlayer()
         
         if PlaceID == Places["Openworld"] then
             State = false
@@ -174,7 +183,7 @@ task.spawn(function()
             Excluded = nil
             Closest = New
         else
-            if CheckWorldModel() then
+            if Module.Functions.CheckWorldModel() then
                 State = false
                 Excluded = nil
             else
@@ -187,33 +196,33 @@ task.spawn(function()
     end
 end)
 
-local function Update()
+Module.Functions.Update = function()
     local Seen = {}
 
     for _, Object in ipairs(Workspace:GetChildren()) do
         pcall(function()
             if not Object then return end
             
-            if Object:IsA("Model") and (Object.Name == "Male" or (PlaceID == Places["Zombies"] and (Object.Name == "Zombie" or IsPlayerModel(Object)))) then
+            if Object:IsA("Model") and (Object.Name == "Male" or (PlaceID == Places["Zombies"] and (Object.Name == "Zombie" or Module.Functions.IsPlayerModel(Object)))) then
                 local Key = tostring(Object)
                 if not Key then return end
                 
-                if PlaceID == Places["Openworld"] and Object.Name == "Male" and IsPlayerModel(Object) then
+                if PlaceID == Places["Openworld"] and Object.Name == "Male" and Module.Functions.IsPlayerModel(Object) then
                     return
                 end
                 
-                local Parts = GetBodyParts(Object)
+                local Parts = Module.Functions.GetBodyParts(Object)
 
                 if Parts and Parts.Head and Parts.HumanoidRootPart then
                     if State and Excluded and Object == Excluded then
-                        if PlaceID ~= Places["Zombies"] or IsPlayerModel(Object) then
+                        if PlaceID ~= Places["Zombies"] or Module.Functions.IsPlayerModel(Object) then
                             return
                         end
                     end
 
                     if not Added[Key] then
                         local Success2, ID, Data = pcall(function()
-                            return PlayerData(Object, Parts)
+                            return Module.Functions.PlayerData(Object, Parts)
                         end)
                         
                         if Success2 and ID and Data then
@@ -256,7 +265,7 @@ local function Update()
     end
 end
 
-local function LocalPlayerData()
+Module.Functions.LocalPlayerData = function()
     local Camera = Workspace:FindFirstChild("Camera")
     if not Camera then return end
 
@@ -285,7 +294,7 @@ local function LocalPlayerData()
     end
 
     if Closest then
-        local Parts = GetBodyParts(Closest)
+        local Parts = Module.Functions.GetBodyParts(Closest)
         if Parts and Parts.Head and Parts.HumanoidRootPart then
             local Data = {
                 LocalPlayer = Closest,
@@ -293,7 +302,7 @@ local function LocalPlayerData()
                 Username = tostring(Closest),
                 Displayname = game.Players.LocalPlayer.Name,
                 Userid = 1,
-                Teamname = IsPlayerModel(Closest) and "Players" or IsZombieModel(Closest) and "Zombies" or "NPCs",
+                Teamname = Module.Functions.IsPlayerModel(Closest) and "Players" or Module.Functions.IsZombieModel(Closest) and "Zombies" or "NPCs",
                 Toolname = "None",
                 Humanoid = Parts.Head,
                 Health = 100,
@@ -386,9 +395,9 @@ end
 task.spawn(function()
     while true do
         task.wait(0.1)
-        Update()
+        Module.Functions.Update()
     
-        local ID, Data = LocalPlayerData()
+        local ID, Data = Module.Functions.LocalPlayerData()
         if ID and Data then override_local_data(Data) end
     end
 end)
