@@ -13,10 +13,6 @@ local Module = {
 local Workspace = game:GetService("Workspace")
 local PlaceID = game.PlaceId
 
-local Closest
-local State = false
-local Excluded = nil
-
 local Places = {
     ["Openworld"] = 3701546109,
     ["Zombies"] = 4747446334, 
@@ -175,23 +171,23 @@ task.spawn(function()
         local New = Module.Functions.GetClosestPlayer()
         
         if PlaceID == Places["Openworld"] then
-            State = false
-            Excluded = nil
-            Closest = nil
+            Module.LocalPlayer.State = false
+            Module.LocalPlayer.Excluded = nil
+            Module.LocalPlayer.Closest = nil
         elseif PlaceID == Places["2V2"] or PlaceID == Places["5V5"] or PlaceID == Places["Ranked"] then
-            State = false
-            Excluded = nil
-            Closest = New
+            Module.LocalPlayer.State = false
+            Module.LocalPlayer.Excluded = nil
+            Module.LocalPlayer.Closest = New
         else
             if Module.Functions.CheckWorldModel() then
-                State = false
-                Excluded = nil
+                Module.LocalPlayer.State = false
+                Module.LocalPlayer.Excluded = nil
             else
-                State = true
-                Excluded = New
+                Module.LocalPlayer.State = true
+                Module.LocalPlayer.Excluded = New
             end
             
-            Closest = New
+            Module.LocalPlayer.Closest = New
         end
     end
 end)
@@ -214,13 +210,13 @@ Module.Functions.Update = function()
                 local Parts = Module.Functions.GetBodyParts(Object)
 
                 if Parts and Parts.Head and Parts.HumanoidRootPart then
-                    if State and Excluded and Object == Excluded then
+                    if Module.LocalPlayer.State and Module.LocalPlayer.Excluded and Object == Module.LocalPlayer.Excluded then
                         if PlaceID ~= Places["Zombies"] or Module.Functions.IsPlayerModel(Object) then
                             return
                         end
                     end
 
-                    if not Added[Key] then
+                    if not Module.Added[Key] then
                         local Success2, ID, Data = pcall(function()
                             return Module.Functions.PlayerData(Object, Parts)
                         end)
@@ -231,7 +227,7 @@ Module.Functions.Update = function()
                             end)
                             
                             if Success3 and Result then
-                                Added[ID] = Object
+                                Module.Added[ID] = Object
                             end
                         end
                     end
@@ -242,11 +238,11 @@ Module.Functions.Update = function()
         end)
     end
 
-    for Key, Model in pairs(Added) do
+    for Key, Model in pairs(Module.Added) do
         pcall(function()
             if not Model then
                 remove_model_data(Key)
-                Added[Key] = nil
+                Module.Added[Key] = nil
                 return
             end
             
@@ -259,7 +255,7 @@ Module.Functions.Update = function()
             if not HumanoidRootPart or not Seen[Key] then
                 pcall(function() remove_model_data(Key) end)
                 
-                Added[Key] = nil
+                Module.Added[Key] = nil
             end
         end)
     end
@@ -293,16 +289,16 @@ Module.Functions.LocalPlayerData = function()
         return
     end
 
-    if Closest then
-        local Parts = Module.Functions.GetBodyParts(Closest)
+    if Module.LocalPlayer.Closest then
+        local Parts = Module.Functions.GetBodyParts(Module.LocalPlayer.Closest)
         if Parts and Parts.Head and Parts.HumanoidRootPart then
             local Data = {
-                LocalPlayer = Closest,
-                Character = Closest,
-                Username = tostring(Closest),
+                LocalPlayer = Module.LocalPlayer.Closest,
+                Character = Module.LocalPlayer.Closest,
+                Username = tostring(Module.LocalPlayer.Closest),
                 Displayname = game.Players.LocalPlayer.Name,
                 Userid = 1,
-                Teamname = Module.Functions.IsPlayerModel(Closest) and "Players" or Module.Functions.IsZombieModel(Closest) and "Zombies" or "NPCs",
+                Teamname = Module.Functions.IsPlayerModel(Module.LocalPlayer.Closest) and "Players" or Module.Functions.IsZombieModel(Module.LocalPlayer.Closest) and "Zombies" or "NPCs",
                 Toolname = "None",
                 Humanoid = Parts.Head,
                 Health = 100,
