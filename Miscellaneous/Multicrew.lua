@@ -1,29 +1,4 @@
 --!optimize 2
-
-_G.Settings = {
-    Vehicles = {
-        Enabled = true,
-        Text = {
-            Name = true,
-            Distance = true
-        },
-        Occupied = {
-            Require = false,
-            Color = Color3.fromRGB(0, 255, 0)
-        },
-        Modules = {
-            Enabled = true,
-            Engine = {false, Color3.fromRGB(255, 255, 255)},
-            Ammo = {true,  Color3.fromRGB(255, 0, 0)}
-        }
-    },
-
-    Drones = {
-        Enabled = true,
-        Color = Color3.fromRGB(255, 255, 255)
-    }
-}
-
 local Settings = _G.Settings
 
 local Workspace = game:GetService("Workspace")
