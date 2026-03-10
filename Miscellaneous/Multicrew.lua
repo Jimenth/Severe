@@ -1,4 +1,29 @@
 --!optimize 2
+
+_G.Settings = {
+    Vehicles = {
+        Enabled = true,
+        Text = {
+            Name = true,
+            Distance = true
+        },
+        Occupied = {
+            Require = false,
+            Color = Color3.fromRGB(0, 255, 0)
+        },
+        Modules = {
+            Enabled = true,
+            Engine = {false, Color3.fromRGB(255, 255, 255)},
+            Ammo = {true,  Color3.fromRGB(255, 0, 0)}
+        }
+    },
+
+    Drones = {
+        Enabled = true,
+        Color = Color3.fromRGB(255, 255, 255)
+    }
+}
+
 local Settings = _G.Settings
 
 local Workspace = game:GetService("Workspace")
@@ -37,11 +62,11 @@ local function TruncateBuffer(Buffer, NewSize, HighWaterMark)
     return math.max(NewSize, HighWaterMark)
 end
 
-local function Cross2D(OriginX, OriginY, PointAX, PointAY, PointBX, PointBY)
+local function CrossDimension(OriginX, OriginY, PointAX, PointAY, PointBX, PointBY)
     return (PointAX - OriginX) * (PointBY - OriginY) - (PointAY - OriginY) * (PointBX - OriginX)
 end
 
-local function ConvexHull(Points, PointCount, Outer)
+local function CalculateConvexHull(Points, PointCount, Outer)
     if PointCount == 0 then return 0 end
     if PointCount == 1 then Outer[1] = Points[1]; return 1 end
     if PointCount == 2 then Outer[1] = Points[1]; Outer[2] = Points[2]; return 2 end
@@ -54,7 +79,7 @@ local function ConvexHull(Points, PointCount, Outer)
 
     for Index = 1, PointCount do
         local Point = Points[Index]
-        while Size >= 2 and Cross2D(Outer[Size - 1].X, Outer[Size - 1].Y, Outer[Size].X, Outer[Size].Y, Point.X, Point.Y) <= 0 do
+        while Size >= 2 and CrossDimension(Outer[Size - 1].X, Outer[Size - 1].Y, Outer[Size].X, Outer[Size].Y, Point.X, Point.Y) <= 0 do
             Size = Size - 1
         end
         Size = Size + 1
@@ -64,7 +89,7 @@ local function ConvexHull(Points, PointCount, Outer)
     local LowerHullSize = Size
     for Index = PointCount - 1, 1, -1 do
         local Point = Points[Index]
-        while Size > LowerHullSize and Cross2D(Outer[Size - 1].X, Outer[Size - 1].Y, Outer[Size].X, Outer[Size].Y, Point.X, Point.Y) <= 0 do
+        while Size > LowerHullSize and CrossDimension(Outer[Size - 1].X, Outer[Size - 1].Y, Outer[Size].X, Outer[Size].Y, Point.X, Point.Y) <= 0 do
             Size = Size - 1
         end
         Size = Size + 1
@@ -87,17 +112,17 @@ local function ProjectPartCorners(Part, WriteOffset)
     local UpVector = Part.UpVector
     local LookVector = Part.LookVector
 
-    local RX = RightVector.X * HalfSizeX
-    local RY = RightVector.Y * HalfSizeX
-    local RZ = RightVector.Z * HalfSizeX
+    local RightX = RightVector.X * HalfSizeX
+    local RightY = RightVector.Y * HalfSizeX
+    local RightZ = RightVector.Z * HalfSizeX
 
-    local UX = UpVector.X * HalfSizeY
-    local UY = UpVector.Y * HalfSizeY
-    local UZ = UpVector.Z * HalfSizeY
+    local UpX = UpVector.X * HalfSizeY
+    local UpY = UpVector.Y * HalfSizeY
+    local UpZ = UpVector.Z * HalfSizeY
 
-    local LX = LookVector.X * HalfSizeZ
-    local LY = LookVector.Y * HalfSizeZ
-    local LZ = LookVector.Z * HalfSizeZ
+    local LookX = LookVector.X * HalfSizeZ
+    local LookY = LookVector.Y * HalfSizeZ
+    local LookZ = LookVector.Z * HalfSizeZ
 
     local SignR = 1
     for _ = 1, 2 do
@@ -106,9 +131,9 @@ local function ProjectPartCorners(Part, WriteOffset)
             local SignL = 1
             for _ = 1, 2 do
                 local WorldPoint = Vector3.new(
-                    PositionX + SignR * RX + SignU * UX + SignL * LX,
-                    PositionY + SignR * RY + SignU * UY + SignL * LY,
-                    PositionZ + SignR * RZ + SignU * UZ + SignL * LZ
+                    PositionX + SignR * RightX + SignU * UpX + SignL * LookX,
+                    PositionY + SignR * RightY + SignU * UpY + SignL * LookY,
+                    PositionZ + SignR * RightZ + SignU * UpZ + SignL * LookZ
                 )
 
                 local ScreenPoint, OnScreen = Camera:WorldToScreenPoint(WorldPoint)
@@ -133,7 +158,7 @@ local function ProjectPartCorners(Part, WriteOffset)
     return WriteOffset
 end
 
-local function DrawFilledConvexPoly(Hull, Size, Color, Opacity)
+local function DrawPolygon(Hull, Size, Color, Opacity)
     if Size < 3 then return end
 
     local Pivot = Vector2.new(Hull[1].X, Hull[1].Y)
@@ -142,7 +167,7 @@ local function DrawFilledConvexPoly(Hull, Size, Color, Opacity)
     end
 end
 
-local function DrawHullOutline(Hull, Size, Color, Opacity, Thickness)
+local function DrawOutline(Hull, Size, Color, Opacity, Thickness)
     if Size < 2 then return end
 
     for Index = 1, Size do
@@ -251,22 +276,32 @@ local function VehicleCache()
 end
 
 local function DroneCache()
-    if not Placed then return end
+    if not Placed then print("Placed is nil") return end
 
     local Current = {}
 
     for _, Drone in ipairs(Placed:GetChildren()) do
-        if not (Drone:IsA("Model") and Drone.Name:lower():find("drone")) then continue end
+        if Drone:IsA("Model") and Drone.Name:lower():find("drone") then
+            Current[Drone] = true
 
-        local DroneModel = Drone:FindFirstDescendant("Drone")
-        local DronePart  = DroneModel and DroneModel:IsA("BasePart") and DroneModel or (DroneModel and DroneModel:FindFirstChildOfClass("BasePart"))
+            if not Stored.Drones[Drone] then
+                local DroneModel = Drone:FindFirstChild("Drone")
+                if not DroneModel then continue end
 
-        if not (DronePart and DronePart:IsA("BasePart")) then continue end
-        Current[Drone] = true
+                local DronePart = DroneModel and DroneModel:IsA("Model") and DroneModel:FindFirstChild("Drone") 
+                if not DronePart then continue end
 
-        if not Stored.Drones[Drone] then
-            local OwnershipTag = Drone:FindFirstDescendant("OwnershipTag")
-            Stored.Drones[Drone] = {Model = Drone, Part = DronePart, OwnerTag = OwnershipTag}
+                local OwnerTag = Drone:FindFirstChild("OwnershipTag")
+                if not OwnerTag then continue end
+
+                if DronePart and DronePart:IsA("BasePart") then
+                    Stored.Drones[Drone] = {
+                        Model = Drone,
+                        Part = DronePart,
+                        OwnerTag = OwnerTag
+                    }
+                end
+            end
         end
     end
 
@@ -341,13 +376,13 @@ local function Render()
                 if PointCount == 0 then continue end
                 Convex.Static.HWMPoints = TruncateBuffer(Convex.Scratch.Points, PointCount, Convex.Static.HWMPoints)
 
-                local Size = ConvexHull(Convex.Scratch.Points, PointCount, Convex.Scratch.Hull)
+                local Size = CalculateConvexHull(Convex.Scratch.Points, PointCount, Convex.Scratch.Hull)
                 if Size == 0 then continue end
 
                 Convex.Static.HWMHull = TruncateBuffer(Convex.Scratch.Hull, Size, Convex.Static.HWMHull)
 
-                DrawFilledConvexPoly(Convex.Scratch.Hull, Size, Color, 0.3)
-                DrawHullOutline(Convex.Scratch.Hull, Size, Color, 1, 1)
+                DrawPolygon(Convex.Scratch.Hull, Size, Color, 0.3)
+                DrawOutline(Convex.Scratch.Hull, Size, Color, 1, 1)
             end
         end
     end
