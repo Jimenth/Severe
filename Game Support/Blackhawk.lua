@@ -2,6 +2,7 @@
 local Module = {
     Functions = {},
     Added = {},
+    Container = nil,
 
     LocalPlayer = {
         Closest = nil,
@@ -21,6 +22,19 @@ local Places = {
     ["Ranked"] = 4524359706
 }
 
+Module.Functions.GetContainer = function()
+    if Module.Container and Module.Container.Parent then return Module.Container end
+    for _, Object in ipairs(Workspace:GetChildren()) do
+        if Object:IsA("Model") and Object.Name == "Model" then
+            if Object:FindFirstChildOfClass("Model") and Object:FindFirstChildOfClass("Model").Name == "Male" then
+                Module.Container = Object
+                return Module.Container
+            end
+        end
+    end
+    return nil
+end
+
 Module.Functions.IsPlayerModel = function(Model)
     return Model:FindFirstChild("BillboardGui") ~= nil
 end
@@ -30,6 +44,10 @@ Module.Functions.IsZombieModel = function(Model)
 end
 
 Module.Functions.GetClosestPlayer = function()
+    if not Module.Container or not Module.Container.Parent then
+        Module.Functions.GetContainer()
+    end
+
     local Camera = Workspace:FindFirstChild("Camera")
     if not Camera then return nil end
 
@@ -193,9 +211,13 @@ task.spawn(function()
 end)
 
 Module.Functions.Update = function()
+    if not Module.Container or not Module.Container.Parent then
+        return
+    end
+
     local Seen = {}
 
-    for _, Object in ipairs(Workspace:GetChildren()) do
+    for _, Object in ipairs(Module.Container:GetChildren()) do
         pcall(function()
             if not Object then return end
             
