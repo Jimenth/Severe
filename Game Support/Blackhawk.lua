@@ -18,12 +18,18 @@ local Places = {
     ["Openworld"] = 3701546109,
     ["Zombies"] = 4747446334, 
     ["2V2"] = 5289429734,
-    ["5V5"] = 5480112241,
+    ["5V5"] = 3826587512,
     ["Ranked"] = 4524359706
 }
 
 Module.Functions.GetContainer = function()
+    if PlaceID == Places["2V2"] or PlaceID == Places["5V5"] or PlaceID == Places["Ranked"] then
+        Module.Container = Workspace
+        return Module.Container
+    end
+
     if Module.Container and Module.Container.Parent then return Module.Container end
+
     for _, Object in ipairs(Workspace:GetChildren()) do
         if Object:IsA("Model") and Object.Name == "Model" then
             if Object:FindFirstChildOfClass("Model") and Object:FindFirstChildOfClass("Model").Name == "Male" then
@@ -32,10 +38,14 @@ Module.Functions.GetContainer = function()
             end
         end
     end
+
     return nil
 end
 
 Module.Functions.IsPlayerModel = function(Model)
+    if PlaceID == Places["2V2"] or PlaceID == Places["5V5"] or PlaceID == Places["Ranked"] then
+        return Model.Name == "Male"
+    end
     return Model:FindFirstChild("BillboardGui") ~= nil
 end
 
@@ -44,10 +54,6 @@ Module.Functions.IsZombieModel = function(Model)
 end
 
 Module.Functions.GetClosestPlayer = function()
-    if not Module.Container or not Module.Container.Parent then
-        Module.Functions.GetContainer()
-    end
-
     local Camera = Workspace:FindFirstChild("Camera")
     if not Camera then return nil end
 
@@ -56,8 +62,8 @@ Module.Functions.GetClosestPlayer = function()
     local ClosestModel = nil
     local ClosestDistance = math.huge
 
-    for _, Model in pairs(Workspace:GetChildren()) do
-        if Model:IsA("Model") and Model.Name == "Male" and Module.Functions.IsPlayerModel(Model) then
+    for _, Model in pairs(Module.Container:GetChildren()) do
+        if Model:IsA("Model") and Model.Name == "Male" and (PlaceID == Places["2V2"] or PlaceID == Places["5V5"] or PlaceID == Places["Ranked"]) or Module.Functions.IsPlayerModel(Model) then
             local HumanoidRootPart = Model:FindFirstChild("Root")
             if HumanoidRootPart then
                 local Distance = vector.magnitude(HumanoidRootPart.Position - Camera.Position)
@@ -217,18 +223,18 @@ Module.Functions.Update = function()
 
     local Seen = {}
 
-    for _, Object in ipairs(Module.Container:GetChildren()) do
+    local function ProcessModel(Object)
         pcall(function()
             if not Object then return end
-            
-            if Object:IsA("Model") and (Object.Name == "Male" or (PlaceID == Places["Zombies"] and (Object.Name == "Zombie" or Module.Functions.IsPlayerModel(Object)))) then
+
+            if Object:IsA("Model") and (Object.Name == "Male" or Object.Name == "Zombie" or Module.Functions.IsPlayerModel(Object)) then
                 local Key = tostring(Object)
                 if not Key then return end
-                
+
                 if PlaceID == Places["Openworld"] and Object.Name == "Male" and Module.Functions.IsPlayerModel(Object) then
                     return
                 end
-                
+
                 local Parts = Module.Functions.GetBodyParts(Object)
 
                 if Parts and Parts.Head and Parts.HumanoidRootPart then
@@ -242,12 +248,12 @@ Module.Functions.Update = function()
                         local Success2, ID, Data = pcall(function()
                             return Module.Functions.PlayerData(Object, Parts)
                         end)
-                        
+
                         if Success2 and ID and Data then
                             local Success3, Result = pcall(function()
                                 return add_model_data(Data, ID)
                             end)
-                            
+
                             if Success3 and Result then
                                 Module.Added[ID] = Object
                             end
@@ -260,6 +266,18 @@ Module.Functions.Update = function()
         end)
     end
 
+    for _, Object in ipairs(Module.Container:GetChildren()) do
+        ProcessModel(Object)
+    end
+
+    if PlaceID == Places["Zombies"] then
+        for _, Object in ipairs(Workspace:GetChildren()) do
+            if Object.Name == "Zombie" then
+                ProcessModel(Object)
+            end
+        end
+    end
+
     for Key, Model in pairs(Module.Added) do
         pcall(function()
             if not Model then
@@ -267,16 +285,15 @@ Module.Functions.Update = function()
                 Module.Added[Key] = nil
                 return
             end
-            
-            local Success, HumanoidRootPart = pcall(function() 
-                return Model:FindFirstChild("Root") 
+
+            local Success, HumanoidRootPart = pcall(function()
+                return Model:FindFirstChild("Root")
             end)
-            
+
             if not Success then HumanoidRootPart = nil end
-            
+
             if not HumanoidRootPart or not Seen[Key] then
-                pcall(function() remove_model_data(Key) end)
-                
+                remove_model_data(Key)
                 Module.Added[Key] = nil
             end
         end)
