@@ -1,3 +1,4 @@
+--!optimize 2
 local Module = {
 	Functions = {},
 	Added = {},
@@ -5,22 +6,21 @@ local Module = {
 
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
-local GameStorage = {
-	Characters = Workspace:FindFirstChild("characters")
-}
 
-local function GetLocalModel()
-	if not GameStorage.Characters then return nil end
+local Characters = Workspace:FindFirstChild("characters")
 
-    LocalPlayer = GameStorage.Characters:FindFirstChild("StarterCharacter")
+Module.Functions.GetLocalModel = function()
+	if not Characters then return nil end
+
+    LocalPlayer = Characters:FindFirstChild("StarterCharacter")
     return LocalPlayer
 end
 
-function Module.Functions.TeamCheck(Entity)
-	if not GameStorage.Characters then return nil end
+Module.Functions.Teamcheck = function(Entity)
+	if not Characters then return nil end
 	if not Players.LocalPlayer then return nil end
 
-	local LocalPlayer = GameStorage.Characters and GameStorage.Characters:FindFirstChild("StarterCharacter")
+	local LocalPlayer = Characters and Characters:FindFirstChild("StarterCharacter")
 
 	if not LocalPlayer then return nil end
 
@@ -37,7 +37,7 @@ function Module.Functions.TeamCheck(Entity)
 	return false
 end
 
-function Module.Functions.GetBodyParts(Model)
+Module.Functions.GetBodyParts = function(Model)
 	return {
 		Head = Model:FindFirstChild("head"),
 		LeftArm = Model:FindFirstChild("left_arm_vis"),
@@ -49,7 +49,7 @@ function Module.Functions.GetBodyParts(Model)
 	}
 end
 
-function Module.Functions.PlayerData(Model, Parts)
+Module.Functions.PlayerData = function(Model, Parts)
 	local Data = {
 		Username = tostring(Model),
 		Displayname = "Player",
@@ -67,7 +67,7 @@ function Module.Functions.PlayerData(Model, Parts)
 		RigType = 0,
 		Whitelisted = false,
 		Archenemies = false,
-		Teamname = Module.Functions.TeamCheck(Model) and "Friendly" or "Enemy",
+		Teamname = (is_team_check_active() and Module.Functions.Teamcheck(Model)) and "Friendly" or "Enemy",
 		Toolname = "Unknown",
 		Aimbot_Part = Parts.Head,
 		Aimbot_TP_Part = Parts.Head,
@@ -79,10 +79,10 @@ function Module.Functions.PlayerData(Model, Parts)
 	return tostring(Model), Data
 end
 
-function Module.Functions.LocalPlayerData()
+Module.Functions.LocalPlayerData = function()
 	if not Players.LocalPlayer then return nil end 
 
-	local LocalPlayer = GetLocalModel()
+	local LocalPlayer = Module.Functions.GetLocalModel()
 
 	if not LocalPlayer then
 		return nil
@@ -120,19 +120,17 @@ function Module.Functions.LocalPlayerData()
 	return tostring(LocalPlayer), LocalData
 end
 
-function Module.Functions.Update()
-	if not GameStorage.Characters then return end
-
-	local Descendants = GameStorage.Characters:GetChildren()
+Module.Functions.Update = function()
+	if not Characters then return end
+	
 	local Seen = {}
 
-	for _, Player in ipairs(Descendants) do
+	for _, Player in ipairs(Characters:GetChildren()) do
 		if Player.Name ~= "StarterCharacter" then
 			local Key = tostring(Player)
 			local Parts = Module.Functions.GetBodyParts(Player)
-			local Enemy = not Module.Functions.TeamCheck(Player)
 
-			if Parts.Head and Parts.HumanoidRootPart and Enemy then
+			if Parts.Head and Parts.HumanoidRootPart and not is_team_check_active() or not Module.Functions.Teamcheck(Player) then
 				if not Module.Added[Key] then
 					local ID, Data = Module.Functions.PlayerData(Player, Parts)
 					if add_model_data(Data, ID) then
