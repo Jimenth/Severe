@@ -15,15 +15,26 @@ local Workspace = game:GetService("Workspace")
 local PlaceID = game.PlaceId
 
 local Places = {
-    ["Openworld"] = 3701546109,
-    ["Zombies"] = 4747446334, 
-    ["2V2"] = 3826587512,
-    ["5V5"] = 3826587512,
-    ["Ranked"] = 4524359706
+    ["Openworld"] = { 3701546109 },
+    ["Zombies"] = { 4747446334 },
+    ["2V2"] = { 5480112241, 3826587512 },
+    ["5V5"] = { 3826587512 },
+    ["Ranked"] = { 4524359706 }
 }
 
+Module.Functions.IsPlace = function(Name)
+    for _, ID in ipairs(Places[Name]) do
+        if PlaceID == ID then return true end
+    end
+    return false
+end
+
+Module.Functions.IsPVP = function()
+    return Module.Functions.IsPlace("2V2") or Module.Functions.IsPlace("5V5") or Module.Functions.IsPlace("Ranked")
+end
+
 Module.Functions.GetContainer = function()
-    if PlaceID == Places["2V2"] or PlaceID == Places["5V5"] or PlaceID == Places["Ranked"] then
+    if Module.Functions.IsPVP() then
         Module.Container = Workspace
         return Module.Container
     end
@@ -43,7 +54,7 @@ Module.Functions.GetContainer = function()
 end
 
 Module.Functions.IsPlayerModel = function(Model)
-    if PlaceID == Places["2V2"] or PlaceID == Places["5V5"] or PlaceID == Places["Ranked"] then
+    if Module.Functions.IsPVP() then
         return Model.Name == "Male"
     end
     return Model:FindFirstChild("BillboardGui") ~= nil
@@ -63,7 +74,7 @@ Module.Functions.GetClosestPlayer = function()
     local ClosestDistance = math.huge
 
     for _, Model in pairs(Module.Container:GetChildren()) do
-        if Model:IsA("Model") and Model.Name == "Male" and (PlaceID == Places["2V2"] or PlaceID == Places["5V5"] or PlaceID == Places["Ranked"]) or Module.Functions.IsPlayerModel(Model) then
+        if Model:IsA("Model") and Model.Name == "Male" and Module.Functions.IsPVP() or Module.Functions.IsPlayerModel(Model) then
             local HumanoidRootPart = Model:FindFirstChild("Root")
             if HumanoidRootPart then
                 local Distance = vector.magnitude(HumanoidRootPart.Position - Camera.Position)
@@ -113,10 +124,13 @@ Module.Functions.GetBodyParts = function(Model)
 end
 
 Module.Functions.PlayerData = function(Model, Parts)
+    local isPlayer = Module.Functions.IsPlayerModel(Model)
+    local isZombie = Module.Functions.IsZombieModel(Model)
+
     local Data = {
         Username = tostring(Model),
-        Displayname = Module.Functions.IsPlayerModel(Model) and "Player" or Module.Functions.IsZombieModel(Model) and "Zombie" or "AI",
-        Userid = Module.Functions.IsPlayerModel(Model) and 0 or -1,
+        Displayname = isPlayer and "Player" or isZombie and "Zombie" or "AI",
+        Userid = isPlayer and 0 or -1,
         Character = Model,
         PrimaryPart = Parts.Head,
         Humanoid = Parts.Head,
@@ -143,9 +157,9 @@ Module.Functions.PlayerData = function(Model, Parts)
         BodyHeightScale = 1,
         RigType = 1,
         Toolname = "None",
-        Teamname = Module.Functions.IsPlayerModel(Model) and "Players" or Module.Functions.IsZombieModel(Model) and "Zombies" or "NPCs",
+        Teamname = isPlayer and "Players" or isZombie and "Zombies" or "NPCs",
         Whitelisted = false,
-        Archenemies = Module.Functions.IsPlayerModel(Model) and true or false,
+        Archenemies = isPlayer and true or false,
         Aimbot_Part = Parts.Head,
         Aimbot_TP_Part = Parts.Head,
         Triggerbot_Part = Parts.Head,
@@ -194,11 +208,11 @@ task.spawn(function()
         task.wait(0.5)
         local New = Module.Functions.GetClosestPlayer()
         
-        if PlaceID == Places["Openworld"] then
+        if Module.Functions.IsPlace("Openworld") then
             Module.LocalPlayer.State = false
             Module.LocalPlayer.Excluded = nil
             Module.LocalPlayer.Closest = nil
-        elseif PlaceID == Places["2V2"] or PlaceID == Places["5V5"] or PlaceID == Places["Ranked"] then
+        elseif Module.Functions.IsPVP() then
             Module.LocalPlayer.State = false
             Module.LocalPlayer.Excluded = nil
             Module.LocalPlayer.Closest = New
@@ -218,10 +232,7 @@ end)
 
 Module.Functions.Update = function()
     Module.Functions.GetContainer()
-    
-    if not Module.Container or not Module.Container.Parent then
-        return
-    end
+    if not Module.Container or not Module.Container.Parent then return end
 
     local Seen = {}
 
@@ -233,7 +244,7 @@ Module.Functions.Update = function()
                 local Key = tostring(Object)
                 if not Key then return end
 
-                if PlaceID == Places["Openworld"] and Object.Name == "Male" and Module.Functions.IsPlayerModel(Object) then
+                if Module.Functions.IsPlace("Openworld") and Object.Name == "Male" and Module.Functions.IsPlayerModel(Object) then
                     return
                 end
 
@@ -241,7 +252,7 @@ Module.Functions.Update = function()
 
                 if Parts and Parts.Head and Parts.HumanoidRootPart then
                     if Module.LocalPlayer.State and Module.LocalPlayer.Excluded and Object == Module.LocalPlayer.Excluded then
-                        if PlaceID ~= Places["Zombies"] or Module.Functions.IsPlayerModel(Object) then
+                        if not Module.Functions.IsPlace("Zombies") or Module.Functions.IsPlayerModel(Object) then
                             return
                         end
                     end
@@ -272,7 +283,7 @@ Module.Functions.Update = function()
         ProcessModel(Object)
     end
 
-    if PlaceID == Places["Zombies"] then
+    if Module.Functions.IsPlace("Zombies") then
         for _, Object in ipairs(Workspace:GetChildren()) do
             if Object.Name == "Zombie" then
                 ProcessModel(Object)
@@ -306,7 +317,7 @@ Module.Functions.LocalPlayerData = function()
     local Camera = Workspace:FindFirstChild("Camera")
     if not Camera then return end
 
-    if PlaceID == Places["Openworld"] then
+    if Module.Functions.IsPlace("Openworld") then
         local Data = {
             LocalPlayer = Camera,
             Character = Camera,
