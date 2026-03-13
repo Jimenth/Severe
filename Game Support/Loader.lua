@@ -6,7 +6,8 @@ local Games = {
     [2491559356] = "Tank.lua",
     [104984488] = "Traitor.lua",
     [807930589] = "West.lua",
-    [4785126950] = "Scorched.lua"
+    [4785126950] = "Scorched.lua",
+    [580765040] = "Ragdoll.lua"
 }
 
 local Branch = "main"
