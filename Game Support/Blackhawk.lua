@@ -17,7 +17,7 @@ local PlaceID = game.PlaceId
 local Places = {
     ["Openworld"] = 3701546109,
     ["Zombies"] = 4747446334, 
-    ["2V2"] = 5289429734,
+    ["2V2"] = 3826587512,
     ["5V5"] = 3826587512,
     ["Ranked"] = 4524359706
 }
@@ -39,7 +39,7 @@ Module.Functions.GetContainer = function()
         end
     end
 
-    return nil
+    return Workspace
 end
 
 Module.Functions.IsPlayerModel = function(Model)
@@ -217,6 +217,8 @@ task.spawn(function()
 end)
 
 Module.Functions.Update = function()
+    Module.Functions.GetContainer()
+    
     if not Module.Container or not Module.Container.Parent then
         return
     end
