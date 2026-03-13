@@ -1,13 +1,19 @@
-local Added = {}
+--!optimize 2
+local Module = {
+    Functions = {},
+    Added = {},
+}
 
 local Workspace = game:GetService("Workspace")
 local Assets = Workspace:FindFirstChild("_Static")
 local Characters = Assets:FindFirstChild("Characters")
-
 local LocalPlayer = game.Players.LocalPlayer
-local function RefreshLocalCharacter() return Characters:FindFirstChild(LocalPlayer.Name) end
 
-local function GetBodyParts(Model)
+Module.Functions.RefreshLocalCharacter = function()
+    return Characters:FindFirstChild(LocalPlayer.Name)
+end
+
+Module.Functions.GetBodyParts = function(Model)
     if not Model then return nil end
 
     local Visual = Model:FindFirstChild("Visuals")
@@ -38,7 +44,7 @@ local function GetBodyParts(Model)
     }
 end
 
-local function PlayerData(Model, Parts)
+Module.Functions.PlayerData = function(Model, Parts)
     local Health = Model:GetAttribute("Health") or 0
     local MaxHealth = Model:GetAttribute("MaxHealth") or 100
 
@@ -53,9 +59,9 @@ local function PlayerData(Model, Parts)
         Torso = Parts.UpperTorso,
         UpperTorso = Parts.UpperTorso,
         LowerTorso = Parts.LowerTorso,
-        LeftArm = Parts.LeftUpperArm, 
+        LeftArm = Parts.LeftUpperArm,
         LeftLeg = Parts.LeftUpperLeg,
-        RightArm = Parts.RightUpperArm, 
+        RightArm = Parts.RightUpperArm,
         RightLeg = Parts.RightUpperLeg,
         LeftUpperArm = Parts.LeftUpperArm,
         LeftLowerArm = Parts.LeftLowerArm,
@@ -114,39 +120,33 @@ local function PlayerData(Model, Parts)
     return tostring(Model), Data
 end
 
-local function LocalPlayerData()
-    local Character = RefreshLocalCharacter()
-    if not Character then return nil end
+Module.Functions.LocalPlayerData = function()
+    local Character = Module.Functions.RefreshLocalCharacter()
+    if not Character then return end
 
-    local Parts = GetBodyParts(Character)
-    if not Parts then return nil end
+    local Parts = Module.Functions.GetBodyParts(Character)
+    if not Parts then return end
 
-    local Health = Character:GetAttribute("Health") or 0
-    local MaxHealth = Character:GetAttribute("MaxHealth") or 100
-
-    local LocalData = {
+    local Data = {
         LocalPlayer = LocalPlayer,
         Character = Character,
         Username = LocalPlayer.Name,
         Displayname = LocalPlayer.DisplayName,
         Userid = 1,
-
         PrimaryPart = Parts.HumanoidRootPart,
-
         Humanoid = Parts.HumanoidRootPart,
-        Health = Health,
-        MaxHealth = MaxHealth,
+        Health = Character:GetAttribute("Health") or 0,
+        MaxHealth = Character:GetAttribute("MaxHealth") or 100,
         RigType = 1,
         Teamname = "Players",
         Toolname = "Unknown",
-
         Head = Parts.Head,
         Torso = Parts.UpperTorso,
         UpperTorso = Parts.UpperTorso,
         LowerTorso = Parts.LowerTorso,
-        LeftArm = Parts.LeftUpperArm, 
+        LeftArm = Parts.LeftUpperArm,
         LeftLeg = Parts.LeftUpperLeg,
-        RightArm = Parts.RightUpperArm, 
+        RightArm = Parts.RightUpperArm,
         RightLeg = Parts.RightUpperLeg,
         LeftUpperArm = Parts.LeftUpperArm,
         LeftLowerArm = Parts.LeftLowerArm,
@@ -160,53 +160,63 @@ local function LocalPlayerData()
         RightUpperLeg = Parts.RightUpperLeg,
         RightLowerLeg = Parts.RightLowerLeg,
         RightFoot = Parts.RightFoot,
-        RootPart = Parts.HumanoidRootPart
+        RootPart = Parts.HumanoidRootPart,
     }
 
-    return tostring(Character), LocalData
+    override_local_data(Data)
 end
 
-local function Update()
+Module.Functions.Update = function()
     local Seen = {}
 
     for _, Character in ipairs(Characters:GetChildren()) do
-        if Character and Character.Name ~= LocalPlayer.Name then
-            local Visual = Character:FindFirstChild("Visuals")
-            
-            if Visual then
-                local Key = tostring(Character)
-                local Parts = GetBodyParts(Character)
-                local Health = Character:GetAttribute("Health") or 0
+        pcall(function()
+            if not Character or Character.Name == LocalPlayer.Name then return end
 
-                if Parts and Parts.Head and Parts.HumanoidRootPart then
-                    if not Added[Key] then
-                        local ID, Data = PlayerData(Character, Parts)
-                        if ID and Data and add_model_data(Data, ID) then
-                            Added[ID] = Character
+            local Visual = Character:FindFirstChild("Visuals")
+            if not Visual then return end
+
+            local Key = tostring(Character)
+            local Parts = Module.Functions.GetBodyParts(Character)
+            local Health = Character:GetAttribute("Health") or 0
+
+            if Parts and Parts.Head and Parts.HumanoidRootPart then
+                if not Module.Added[Key] then
+                    local Success, ID, Data = pcall(function()
+                        return Module.Functions.PlayerData(Character, Parts)
+                    end)
+
+                    if Success and ID and Data then
+                        local Success2, Result = pcall(function()
+                            return add_model_data(Data, ID)
+                        end)
+
+                        if Success2 and Result then
+                            Module.Added[ID] = Character
                         end
-                    else
-                        edit_model_data({Health = Health}, Key)
                     end
-                    
-                    Seen[Key] = true
+                else
+                    pcall(function()
+                        edit_model_data({ Health = Health }, Key)
+                    end)
                 end
+
+                Seen[Key] = true
             end
-        end
+        end)
     end
 
-    for Key, Model in pairs(Added) do
-        if not Seen[Key] or not Model or not Model.Parent then
-            remove_model_data(Key)
-            Added[Key] = nil
-        end
+    for Key, Model in pairs(Module.Added) do
+        pcall(function()
+            if not Seen[Key] or not Model or not Model.Parent then
+                remove_model_data(Key)
+                Module.Added[Key] = nil
+            end
+        end)
     end
 end
 
 RunService.PostLocal:Connect(function()
-    Update()
-
-    local LocalID, LocalData = LocalPlayerData()
-    if LocalID and LocalData then
-        override_local_data(LocalData)
-    end
+    Module.Functions.Update()
+    Module.Functions.LocalPlayerData()
 end)
