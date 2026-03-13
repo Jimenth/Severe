@@ -1,3 +1,4 @@
+--!optimize 2
 local Module = {
 	Functions = {},
 	Added = {},
