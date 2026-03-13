@@ -1,15 +1,19 @@
-local Added = {}
+--!optimize 2
+local Module = {
+    Functions = {},
+    Added = {},
+}
+
 local Workspace = game:GetService("Workspace")
 local Entities = Workspace:FindFirstChild("WORKSPACE_Entities")
 local Players = Entities:FindFirstChild("Players")
-
 local LocalPlayer = game.Players.LocalPlayer
 
-local function RefreshLocalCharacter()
+Module.Functions.RefreshLocalCharacter = function()
     return Players:FindFirstChild(LocalPlayer.Name)
 end
 
-local function GetBodyParts(Model)
+Module.Functions.GetBodyParts = function(Model)
     return {
         Head = Model:FindFirstChild("Head"),
         UpperTorso = Model:FindFirstChild("UpperTorso"),
@@ -41,7 +45,7 @@ local function GetBodyParts(Model)
     }
 end
 
-local function PlayerData(Model, Parts)
+Module.Functions.PlayerData = function(Model, Parts)
     local Humanoid = Model:FindFirstChild("Humanoid")
     local Health = Humanoid and Humanoid.Health or 0
 
@@ -56,9 +60,9 @@ local function PlayerData(Model, Parts)
         Torso = Parts.Torso or Parts.UpperTorso,
         UpperTorso = Parts.UpperTorso,
         LowerTorso = Parts.LowerTorso,
-        LeftArm = Parts.LeftArm or Parts.LeftUpperArm, 
+        LeftArm = Parts.LeftArm or Parts.LeftUpperArm,
         LeftLeg = Parts.LeftLeg or Parts.LeftUpperLeg,
-        RightArm = Parts.RightArm or Parts.RightUpperArm, 
+        RightArm = Parts.RightArm or Parts.RightUpperArm,
         RightLeg = Parts.RightLeg or Parts.RightUpperLeg,
         LeftUpperArm = Parts.LeftUpperArm,
         LeftLowerArm = Parts.LeftLowerArm,
@@ -117,28 +121,21 @@ local function PlayerData(Model, Parts)
     return tostring(Model), Data
 end
 
-local function LocalPlayerData()
-    local LocalCharacter = RefreshLocalCharacter()
-    if not LocalCharacter then
-        return nil
-    end
+Module.Functions.LocalPlayerData = function()
+    local LocalCharacter = Module.Functions.RefreshLocalCharacter()
+    if not LocalCharacter then return end
 
     local Humanoid = LocalCharacter:FindFirstChild("Humanoid")
-    if not Humanoid then
-        return nil
-    end
+    if not Humanoid then return end
 
-    local Health = Humanoid.Health
-
-    local LocalData = {
+    local Data = {
         LocalPlayer = LocalPlayer,
         Character = LocalCharacter,
         Username = tostring(LocalPlayer),
         Displayname = LocalPlayer.Name,
         Userid = 1,
-
         Humanoid = Humanoid,
-        Health = Health,
+        Health = Humanoid.Health,
         MaxHealth = Humanoid.MaxHealth,
         RigType = 1,
         Teamname = "Players",
@@ -148,7 +145,6 @@ local function LocalPlayerData()
         RootPart = LocalCharacter:FindFirstChild("HumanoidRootPart"),
         LeftFoot = LocalCharacter:FindFirstChild("LeftFoot"),
         LowerTorso = LocalCharacter:FindFirstChild("LowerTorso"),
-
         LeftArm = LocalCharacter:FindFirstChild("LeftUpperArm"),
         LeftLeg = LocalCharacter:FindFirstChild("LeftUpperLeg"),
         RightArm = LocalCharacter:FindFirstChild("RightUpperArm"),
@@ -156,46 +152,58 @@ local function LocalPlayerData()
         UpperTorso = LocalCharacter:FindFirstChild("UpperTorso"),
     }
 
-    return tostring(LocalCharacter), LocalData
+    override_local_data(Data)
 end
 
-local function Update()
+Module.Functions.Update = function()
     local Seen = {}
 
     for _, Player in ipairs(Players:GetChildren()) do
-        local Humanoid = Player:FindFirstChild("Humanoid")
-        if Humanoid and Player.Parent then
-            local Key = tostring(Player)
-            local Parts = GetBodyParts(Player)
+        pcall(function()
+            local Humanoid = Player:FindFirstChild("Humanoid")
+            if Humanoid and Player.Parent then
+                local Key = tostring(Player)
+                local Parts = Module.Functions.GetBodyParts(Player)
 
-            if Parts.Head and Parts.HumanoidRootPart and Player.Name ~= LocalPlayer.Name then
-                if not Added[Key] then
-                    local ID, Data = PlayerData(Player, Parts)
-                    if add_model_data(Data, ID) then
-                        Added[ID] = Player
+                if Parts.Head and Parts.HumanoidRootPart and Player.Name ~= LocalPlayer.Name then
+                    if not Module.Added[Key] then
+                        local Success, ID, Data = pcall(function()
+                            return Module.Functions.PlayerData(Player, Parts)
+                        end)
+
+                        if Success and ID and Data then
+                            local Success2, Result = pcall(function()
+                                return add_model_data(Data, ID)
+                            end)
+
+                            if Success2 and Result then
+                                Module.Added[ID] = Player
+                            end
+                        end
+                    else
+                        pcall(function()
+                            edit_model_data({ Health = Humanoid.Health }, Key)
+                        end)
                     end
-                else
-                    edit_model_data({Health = Humanoid.Health}, Key)
+
+                    Seen[Key] = true
                 end
-                Seen[Key] = true
             end
-        end
+        end)
     end
 
-    for Key, Model in pairs(Added) do
-        local HumanoidRootPart = Model:FindFirstChild("HumanoidRootPart")
-        if not HumanoidRootPart or not Seen[Key] then
-            remove_model_data(Key)
-            Added[Key] = nil
-        end
+    for Key, Model in pairs(Module.Added) do
+        pcall(function()
+            local HumanoidRootPart = Model:FindFirstChild("HumanoidRootPart")
+            if not HumanoidRootPart or not Seen[Key] then
+                remove_model_data(Key)
+                Module.Added[Key] = nil
+            end
+        end)
     end
 end
 
 RunService.PostLocal:Connect(function()
-    Update()
-
-    local LocalID, LocalData = LocalPlayerData()
-    if LocalID and LocalData then
-        override_local_data(LocalData)
-    end
+    Module.Functions.Update()
+    Module.Functions.LocalPlayerData()
 end)
