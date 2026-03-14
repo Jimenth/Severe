@@ -41,9 +41,11 @@ local Interface = {
         }
     },
 
-    Font = "Proggy",
-    SmallText = 12,
-    MediumText = 14,
+    Text = {
+        Font = "Proggy",
+        Small = 12,
+        Medium = 14,
+    }
 }
 
 local Crates = {
@@ -1254,7 +1256,7 @@ local function DrawWindow(Position, Character, Transparency)
     local WeaponName = GetWeapon(Character) or "None"
     if typeof(WeaponName) ~= "string" then WeaponName = tostring(WeaponName or "") end
     if WeaponName == "" or WeaponName == "None" then WeaponName = "No Weapon" end
-    DrawingImmediate.OutlinedText(Vector2.new(X + Width / 2, ContentY + 12), Interface.MediumText, Coloring.Text, Transparency, WeaponName, true, Interface.Font)
+    DrawingImmediate.OutlinedText(Vector2.new(X + Width / 2, ContentY + 12), Interface.Text.Medium, Coloring.Text, Transparency, WeaponName, true, Interface.Text.Font)
 
     local CurrentHealth = 0
     local MaxHealth = 100
@@ -1275,7 +1277,7 @@ local function DrawWindow(Position, Character, Transparency)
     
     local Percent = math.clamp((MaxHealth == 0) and 0 or (CurrentHealth / MaxHealth), 0, 1)
     local BarW = ContentW - 18
-    local BarH = Interface.SmallText + 4
+    local BarH = Interface.Text.Small + 4
     local BarX = ContentX + 9
     local BarY = ContentY + ContentH - (BarH + 6)
     local FillW = math.floor((BarW - 4) * Percent)
@@ -1298,7 +1300,7 @@ local function DrawWindow(Position, Character, Transparency)
             end
             
             local TextY = BarY - 15
-            DrawingImmediate.OutlinedText(Vector2.new(BarX, TextY), Interface.SmallText, IndicationColor, Transparency, Indication, false, Interface.Font)
+            DrawingImmediate.OutlinedText(Vector2.new(BarX, TextY), Interface.Text.Small, IndicationColor, Transparency, Indication, false, Interface.Text.Font)
         end
     end
 
@@ -1307,7 +1309,7 @@ local function DrawWindow(Position, Character, Transparency)
     if FillW > 0 then DrawingImmediate.FilledRectangle(Vector2.new(BarX + 2, BarY + 2), Vector2.new(FillW, BarH - 4), Coloring.Accent, Transparency) end
 
     local HealthText = tostring(math.floor(CurrentHealth) .. "/" .. tostring(MaxHealth))
-    DrawingImmediate.OutlinedText(Vector2.new(BarX + BarW / 2, BarY + (BarH / 2) - 5), Interface.SmallText, Coloring.Text, Transparency, HealthText, true, Interface.Font)
+    DrawingImmediate.OutlinedText(Vector2.new(BarX + BarW / 2, BarY + (BarH / 2) - 5), Interface.Text.Small, Coloring.Text, Transparency, HealthText, true, Interface.Text.Font)
 end
 
 local function DrawClothingWindow(Position, Character, Transparency)
@@ -1353,10 +1355,10 @@ local function DrawClothingWindow(Position, Character, Transparency)
     for Index, Item in ipairs(ClothingItems) do
         local BoxX = StartX + ((Index - 1) * (BoxWidth + Spacing))
         
-        DrawingImmediate.OutlinedText(Vector2.new(BoxX + BoxWidth / 2, LabelY), Interface.SmallText, Coloring.Text, Transparency, Item.Name, true, Interface.Font)
+        DrawingImmediate.OutlinedText(Vector2.new(BoxX + BoxWidth / 2, LabelY), Interface.Text.Small, Coloring.Text, Transparency, Item.Name, true, Interface.Text.Font)
         DrawingImmediate.FilledRectangle(Vector2.new(BoxX, BoxY), Vector2.new(BoxWidth, BoxHeight), Color3.fromRGB(18, 18, 18), Transparency)
         DrawingImmediate.FilledRectangle(Vector2.new(BoxX + 1, BoxY + 1), Vector2.new(BoxWidth - 2, BoxHeight - 2), Color3.fromRGB(28, 28, 28), Transparency)
-        DrawingImmediate.OutlinedText(Vector2.new(BoxX + BoxWidth / 2, BoxY + BoxHeight / 2 - 5), Interface.SmallText, Coloring.Text, Transparency, Shorten(Item.Value, 11), true, Interface.Font)
+        DrawingImmediate.OutlinedText(Vector2.new(BoxX + BoxWidth / 2, BoxY + BoxHeight / 2 - 5), Interface.Text.Small, Coloring.Text, Transparency, Shorten(Item.Value, 11), true, Interface.Text.Font)
     end
 end
 
