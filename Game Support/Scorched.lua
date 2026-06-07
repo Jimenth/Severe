@@ -14,22 +14,11 @@ local Camera = workspace.CurrentCamera
 math.randomseed(os.time())
 
 Module.Functions.GetPlayers = function()
-    local Folders = {}
     for _, Folder in ipairs(Workspace:GetChildren()) do
-        if Folder:IsA("Folder") then Folders[#Folders+1] = Folder end
-    end
-
-    local Fourth = Folders[4]
-    if Fourth then
-        for _, Child in ipairs(Fourth:GetChildren()) do
-            if Child.Name ~= "Model" then
-                return Folders[3]
-            end
+        if Folder:IsA("Folder") and Folder:FindFirstChild("Model") then
+            return Folder
         end
-        return Fourth
     end
-
-    return Folders[3]
 end
 
 Module.Functions.GetSelf = function()
