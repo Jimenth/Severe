@@ -94,9 +94,12 @@ local Items = {
         "AKMN",
         "AsVal",
         "FAL",
+        "GoldenMakarov",
         "IZh81",
         "IZh12",
+        "KPVT",
         "M4",
+        "Makarov",
         "MK23",
         "MP443",
         "MP5SD",
@@ -109,17 +112,20 @@ local Items = {
         "SKS",
         "SVD",
         "TFZ98S",
+        "TOZ106",
         "TT33",
         "VZ61",
-        "FlareGun",
+        "YakB",
+        "B8V20",
         "ADAR15",
         "M9Fade"
     },
 
     ["Attachments"] = {
         "ACOG",
-        "DV2",
         "DAGR",
+        "DV2",
+        "ELCAN",
         "FlashHiderAKM",
         "FlashHiderFAL",
         "FlashHiderKAC",
@@ -134,6 +140,7 @@ local Items = {
         "FrontM4",
         "FrontMK12",
         "FrontPKM",
+        "FrontRomanianAKMN",
         "FrontSKS",
         "FrontSVD",
         "FrontSaiga",
@@ -151,15 +158,16 @@ local Items = {
         "ImprStockAKM",
         "KACSuppressor",
         "LaserPointer",
-        "LaserPointerOLD",
         "LPVO",
         "MuzzleBrakeAKM",
         "OKP7",
         "OilCanSuppressor",
         "PBS1",
+        "PEQ15",
         "PSO1",
         "PistolMuzzleBrake",
         "PolymerStockAKMN",
+        "PolymerStockFAL",
         "PuScope",
         "Scope6X",
         "SniperScope",
@@ -182,6 +190,7 @@ local Items = {
         "StockADAR",
         "T1Sight",
         "TacticalFrontAKMN",
+        "TacticalFrontFAL",
         "TacticalFrontSKS",
         "TacticalFrontSVD",
         "TacticalStockSKS",
@@ -194,6 +203,7 @@ local Items = {
     ["Magazines"] = {
         "20Rnd556",
         "20rndFAL",
+        "30rndFAL",
         "762x25MAG",
         "762x25Rnd71Mag",
         "762x25TTMAG",
@@ -216,6 +226,7 @@ local Items = {
         "Mag556Rnd100",
         "MagR700",
         "MagTFZ98",
+        "MagTOZ106",
         "MK23ExtMag",
         "PMAG10rnd",
         "SaigaMag5rnd",
@@ -248,7 +259,10 @@ local Items = {
         "9x19Tracer",
         "9x39AP",
         "9x39Z",
-        "PG7"
+        "PG7",
+        "127x108Tracer",
+        "145x114Tracer",
+        "S8KO"
     },
 
     ["Medical"] = {
@@ -256,20 +270,22 @@ local Items = {
         "AI4",
         "AA2",
         "Bandage",
+        "Defib",
         "IFAK",
         "Rags",
         "WoundDressing",
         "SerumYellow",
         "SerumRed",
-        "SerumGreen"
+        "SerumGreen",
+        "SerumPurple"
     },
 
     ["Armor"] = {
         "6B2",
-        "6b 23",
-        "6b 27",
-        "6b 43",
-        "6b 47",
+        "6B23",
+        "6B27",
+        "6B43",
+        "6B47",
         "6B5",
         "Altyn",
         "Attak5",
@@ -310,6 +326,7 @@ local Items = {
         "GorkaShirt",
         "HandWraps",
         "KneePads",
+        "SewnMask",
         "SpecopsBackpack",
         "WastelandBackpack",
         "WastelandPants",
@@ -440,6 +457,7 @@ local Items = {
         "CFan",
         "CPU",
         "GPU",
+        "PDA",
         "PortableConsole",
         "PSU",
         "RAM",
@@ -464,7 +482,11 @@ local Items = {
         "GiftTier1",
         "GiftTier2",
         "GiftTier3",
+        "Immunster",
+        "ImmunsterReactor",
+        "ImmunsterWinter",
         "Snowball",
+        "T12W",
         "TFZ0"
     }
 }
@@ -567,17 +589,22 @@ end
 
 local function GetClothing(Character)
     if not Character then return end
-    local Mask, Head, Chestrig, Leg, Back, Glove = "None", "None", "None", "None", "None", "None"
-    
+    local Mask, Head, Chestrig, Leg, Back = "None", "None", "None", "None", "None"
+
     local Clothing = Character:FindFirstChild("Clothing")
     if Clothing then
-        Mask = (Clothing.ClothingMask and Clothing.ClothingMask.Value and type(Clothing.ClothingMask.Value.Name) == "string" and Clothing.ClothingMask.Value.Name) or "None"
-        Head = (Clothing.ClothingHeadware and Clothing.ClothingHeadware.Value and type(Clothing.ClothingHeadware.Value.Name) == "string" and Clothing.ClothingHeadware.Value.Name) or "None"
-        Chestrig = (Clothing.ClothingChestRig and Clothing.ClothingChestRig.Value and type(Clothing.ClothingChestRig.Value.Name) == "string" and Clothing.ClothingChestRig.Value.Name) or "None"
-        Leg = (Clothing.ClothingLegArmor and Clothing.ClothingLegArmor.Value and type(Clothing.ClothingLegArmor.Value.Name) == "string" and Clothing.ClothingLegArmor.Value.Name) or "None"
-        Back = (Clothing.ClothingBackpack and Clothing.ClothingBackpack.Value and type(Clothing.ClothingBackpack.Value.Name) == "string" and Clothing.ClothingBackpack.Value.Name) or "None"
+        local function Get(Name)
+            local Object = Clothing:FindFirstChild(Name)
+            return (Object and Object.Value and type(Object.Value.Name) == "string" and Object.Value.Name) or "None"
+        end
+
+        Mask = Get("ClothingMask")
+        Head = Get("ClothingHeadware")
+        Chestrig = Get("ClothingChestRig")
+        Leg = Get("ClothingLegArmor")
+        Back = Get("ClothingBackpack")
     end
-    
+
     return Mask, Head, Chestrig, Leg, Back
 end
 
@@ -886,6 +913,7 @@ end
 
 local function Cache()
     if not UpdateClient() then return end
+    if not Client.Character then return end
     local ClientPosition = Client.Position
     
     local function Process(Enabled, Storage, MaxDistance, Validator)
@@ -904,7 +932,7 @@ local function Cache()
             for _, Drop in ipairs(Dropped:GetChildren()) do
                 if Drop.ClassName == "Model" and not Drop:FindFirstChild("Head") and not Stored.Drops[Drop] then
                     local Object = Drop.PrimaryPart
-                    if Object and vector.magnitude(ClientPosition - Object.Position) <= Maximum and ItemValid(Drop.Name) then
+                    if Object and Object:IsA("BasePart") and vector.magnitude(ClientPosition - Object.Position) <= Maximum and ItemValid(Drop.Name) then
                         Stored.Drops[Drop] = { Item = Drop, Object = Object, Name = Drop.Name }
                     end
                 end
@@ -942,7 +970,7 @@ local function Cache()
             local function AddCrate(Crate)
                 if not Stored.Crates[Crate] and Crate:GetAttribute("CanSpawnLoot") then
                     local Object = Crate.PrimaryPart
-                    if Object then
+                    if Object and Object:IsA("BasePart") then
                         local Distance = vector.magnitude(ClientPosition - Object.Position)
                         local Name = Crate:GetAttribute("DisplayName") or Crate.Name
                         if Distance <= Maximum and CrateValid(Crate.Name) then
@@ -1127,110 +1155,98 @@ end
 task.spawn(function()
 	while true do
 		task.wait(0.5)
-        Cache()
+		Cache()
 
 		local Seen = {}
-		
 		local CurrentAI = Zones and Zones:GetChildren() or {}
 
 		for _, Zone in ipairs(CurrentAI) do
-			pcall(function()
-				for _, NPC in ipairs(Zone:GetChildren()) do
-					pcall(function()
-						if typeof(NPC) ~= "Instance" or NPC.ClassName ~= "Model" then return end
+			for _, NPC in ipairs(Zone:GetChildren()) do
+				if typeof(NPC) ~= "Instance" or NPC.ClassName ~= "Model" then continue end
 
-						local Humanoid = NPC:FindFirstChildOfClass("Humanoid")
-						if not Humanoid then return end
+				local Humanoid = NPC:FindFirstChildOfClass("Humanoid")
+				if not Humanoid then continue end
 
-						local HumanoidRootPart = NPC:FindFirstChild("HumanoidRootPart")
-						if not HumanoidRootPart then return end
+				local HumanoidRootPart = NPC:FindFirstChild("HumanoidRootPart")
+				if not HumanoidRootPart then continue end
 
-						if NPC.PrimaryPart ~= HumanoidRootPart then return end
+				if NPC.PrimaryPart ~= HumanoidRootPart then continue end
 
-						local Parts = GetBodyParts(NPC)
-						if not Parts or not Parts.HumanoidRootPart then return end
+				local Parts = GetBodyParts(NPC)
+				if not Parts or not Parts.HumanoidRootPart then continue end
 
-						local Key = tostring(NPC)
+				local Key = tostring(NPC)
 
-						if not Stored.AI[Key] then
-							local ID, Data = EntityData(NPC, Parts)
-							if ID and Data and add_model_data(Data, ID) then
-								Stored.AI[ID] = NPC
-							end
-						else
-							edit_model_data({Health = Humanoid.Health}, Key)
-						end
-
-						Seen[Key] = true
-					end)
+				if not Stored.AI[Key] then
+					local ID, Data = EntityData(NPC, Parts)
+					if ID and Data and ID == Key and add_model_data(Data, ID) then
+						Stored.AI[Key] = NPC
+					end
+				else
+					edit_model_data({ Health = Humanoid.Health }, Key)
 				end
-			end)
+
+				Seen[Key] = true
+			end
 		end
 
-	    for _, Player in ipairs(Players:GetChildren()) do
-		    pcall(function()
-		        if Player and Player ~= LocalPlayer then
-				    local Character = Player.Character
-				    local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+		for _, Player in ipairs(Players:GetChildren()) do
+			if not Player or Player == LocalPlayer then continue end
 
-				    if Humanoid and Character ~= Client.Character then
-                        local Weapon = GetWeapon(Character)
-					    local Key = tostring(Character)
-					    local Parts = GetBodyParts(Character)
+			local Character = Player.Character
+			if not Character or Character == Client.Character then continue end
 
-					    if Parts and Parts.HumanoidRootPart then
-						    if is_team_check_active() then
-						    	if Player.Team == LocalPlayer.Team then
-								    if Stored.Players[Key] then
-								    	local ID = tostring(Character)
-								    	remove_model_data(ID)
-								    	Stored.Players[ID] = nil
-								    end
-								    Seen[Key] = nil
-						    	else
-								    if not Stored.Players[Key] then
-									    local ID, Data = GetPlayerData(Player)
-									    if ID and Data and add_model_data(Data, ID) then
-									    	Stored.Players[ID] = Character
-									    end
-								    else
-								    	edit_model_data({ Health = Humanoid.Health }, Key)
-							    	end
-							    	Seen[Key] = true
-						    	end
-					    	else
-						    	if not Stored.Players[Key] then
-								    local ID, Data = GetPlayerData(Player)
-								    if ID and Data and add_model_data(Data, ID) then
-								        Stored.Players[ID] = Character
-								    end
-								else
-									edit_model_data({ Health = Humanoid.Health }, Key)
-								end
-								Seen[Key] = true
-							end
-						end
+			local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+			if not Humanoid then continue end
+
+			local Parts = GetBodyParts(Character)
+			if not Parts or not Parts.HumanoidRootPart then continue end
+
+			local Key = tostring(Character)
+			local Weapon = GetWeapon(Character)
+
+			if is_team_check_active() then
+				if Player.Team == LocalPlayer.Team then
+					if Stored.Players[Key] then
+						remove_model_data(Key)
+						Stored.Players[Key] = nil
 					end
+				else
+					if not Stored.Players[Key] then
+						local ID, Data = GetPlayerData(Player)
+						if ID and Data and ID == Key and add_model_data(Data, ID) then
+							Stored.Players[Key] = Character
+						end
+					else
+						edit_model_data({ Health = Humanoid.Health }, Key)
+					end
+					Seen[Key] = true
 				end
-			end)
+			else
+				if not Stored.Players[Key] then
+					local ID, Data = GetPlayerData(Player)
+					if ID and Data and ID == Key and add_model_data(Data, ID) then
+						Stored.Players[Key] = Character
+					end
+				else
+					edit_model_data({ Health = Humanoid.Health }, Key)
+				end
+				Seen[Key] = true
+			end
 		end
 
 		for ID, Model in pairs(Stored.AI) do
-			pcall(function()
-				if not Model or not Model.Parent or not Seen[ID] then
-					remove_model_data(ID)
-					Stored.AI[ID] = nil
-				end
-			end)
+			if not Model or not Model.Parent or not Seen[ID] then
+				remove_model_data(ID)
+				Stored.AI[ID] = nil
+			end
 		end
 
 		for ID, Model in pairs(Stored.Players) do
-			pcall(function()
-				if not Model or not Model.Parent or not Seen[ID] then
-					remove_model_data(ID)
-					Stored.Players[ID] = nil
-				end
-			end)
+			if not Model or not Model.Parent or not Seen[ID] then
+				remove_model_data(ID)
+				Stored.Players[ID] = nil
+			end
 		end
 	end
 end)
