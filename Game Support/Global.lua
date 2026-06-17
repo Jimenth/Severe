@@ -385,9 +385,16 @@ end
 RunService.PostLocal:Connect(function()
     local LocalPlayer = Players.LocalPlayer
     if not LocalPlayer then return end
-    
-    if not Values.Located then pcall(Locate) return end
-    if #Cache.Folders == 0 and (os.clock() - Values.Last) > 5 then Values.Located = false return end
+
+    local Previous = false
+    local Current = table.find(getpressedkeys(), "RightShift") ~= nil
+
+    if (os.clock() - Values.Last) > 5 and Current and not Previous then
+        pcall(Locate)
+		send_notification("Rescanned", "warning")
+    end
+
+    Previous = Current
     
     local Seen = {}
     
