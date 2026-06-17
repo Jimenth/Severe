@@ -1,4 +1,3 @@
---!optimize 2
 local Module = loadstring(game:HttpGet("https://raw.githubusercontent.com/Jimenth/Severe/refs/heads/main/Modules/Highlight.lua"))();
 task.wait(2)
 
@@ -1155,7 +1154,7 @@ end
 task.spawn(function()
 	while true do
 		task.wait(0.5)
-		Cache()
+		coroutine.wrap(Cache)()
 
 		local Seen = {}
 		local CurrentAI = Zones and Zones:GetChildren() or {}
@@ -1250,6 +1249,34 @@ task.spawn(function()
 		end
 	end
 end)
+
+if _G.Settings.Weapon.NoRecoil then
+	for _, Caliber in pairs(game.ReplicatedStorage.AmmoTypes:GetChildren()) do
+		if Caliber:GetAttribute("RecoilStrength") then
+            if Caliber:GetAttribute("RecoilStrength") ~= 0 then
+			    Caliber:SetAttribute("RecoilStrength", 0)
+            end
+		end
+	end
+
+    for _, Weapon in pairs(game.ReplicatedStorage.RangedWeapons:GetChildren()) do
+		if Weapon:GetAttribute("RecoilRecoveryTimeMod") then
+            if Weapon:GetAttribute("RecoilRecoveryTimeMod") ~= 0 then
+			    Weapon:SetAttribute("RecoilRecoveryTimeMod", 0)
+            end
+		end
+	end
+end
+
+if _G.Settings.Weapon.NoDrop then
+	for _, Caliber in pairs(game.ReplicatedStorage.AmmoTypes:GetChildren()) do
+		if Caliber:GetAttribute("ProjectileDrop") then
+            if Caliber:GetAttribute("ProjectileDrop") ~= 0 then
+			    Caliber:SetAttribute("ProjectileDrop", 0)
+            end
+		end
+	end
+end
 
 local function DrawWindow(Position, Character, Transparency)
     local X = Position.X
