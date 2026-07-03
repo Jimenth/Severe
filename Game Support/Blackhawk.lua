@@ -13,7 +13,7 @@ local Module = {
     Places = {
         Openworld = { 3701546109 },
         Zombies = { 4747446334 },
-        Combat = { 5480112241, 3826587512, 3826587512, 4524359706 },
+        Combat = { 5480112241, 3826587512, 3826587512, 4524359706, 1054526971 },
     }
 }
 
@@ -59,6 +59,8 @@ Module.Functions.IsZombieModel = function(Model)
 end
 
 Module.Functions.GetClosestPlayer = function()
+    if not Module.Container or not Module.Container.Parent then Module.Functions.GetContainer() end
+    
     local Camera = Workspace:FindFirstChild("Camera")
     if not Camera then return nil end
 
@@ -94,7 +96,7 @@ end
 Module.Functions.GetBodyParts = function(Model)
     return {
         Head = Model:FindFirstChild("Head"),
-        UpperTorso = Model:FindFirstChild("LowerTorso"),
+        UpperTorso = Model:FindFirstChild("UpperTorso"),
         LowerTorso = Model:FindFirstChild("LowerTorso"),
 
         LeftUpperArm = Model:FindFirstChild("LeftUpperArm"),
