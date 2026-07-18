@@ -25,6 +25,32 @@ function Module.Function:GetPlayerInstance(Character)
     return Players:FindFirstChild(Character.Name)
 end
 
+function Module.Function:GetHealth(Character)
+    if not Character then return 0, 0 end
+
+    local Health = 0
+    local MaxHealth = 0
+
+    for _, BodyPart in ipairs({"Head", "Torso"}) do
+        local Part = Character:FindFirstChild(BodyPart)
+
+        if Part then
+            local HealthValue = Part:FindFirstChild("Health")
+
+            if HealthValue and HealthValue:IsA("NumberValue") then
+                if HealthValue.Value <= 0 then
+                    return 0, MaxHealth
+                end
+
+                Health += HealthValue.Value
+                MaxHealth += HealthValue:GetAttribute("MaxHealth") or 0
+            end
+        end
+    end
+
+    return Health, MaxHealth
+end
+
 function Module.Function.Cache()
     for Identifier, Entry in Module.Stored do
         if not Entry or not Entry.Parent then
@@ -63,8 +89,7 @@ function Module.Function:CharacterData(Character, Parts)
     local Humanoid = Character and Character:FindFirstChild("Humanoid")
     if not Humanoid then return nil end
 
-    local Health = Humanoid and Humanoid.Health 
-    local MaxHealth = Humanoid and Humanoid.MaxHealth
+    local Health, MaxHealth = Module.Function:GetHealth(Character)
 
     local Player = Module.Function:GetPlayerInstance(Character)
     if not Player then return nil end
@@ -92,7 +117,7 @@ function Module.Function:CharacterData(Character, Parts)
         Aimbot_TP_Part = Parts.Head,
         Triggerbot_Part = Parts.Head,
         Health = Health,
-        MaxHealth = Humanoid and Humanoid.MaxHealth or 0,
+        MaxHealth = MaxHealth,
         body_parts_data = {
             { name = "LowerTorso", part = Parts.Torso },
             { name = "LeftUpperLeg", part = Parts.LeftLeg },
@@ -134,6 +159,8 @@ function Module.Function:UpdateLocalData()
     local Humanoid = Character:FindFirstChild("Humanoid")
     if not Humanoid then return end
 
+    local Health, MaxHealth = Module.Function:GetHealth(Character)
+
     local Player = Module.Function:GetPlayerInstance(Character)
     if not Player then return nil end
 
@@ -146,8 +173,8 @@ function Module.Function:UpdateLocalData()
         Displayname = Player.DisplayName,
         Userid = Player.UserId,
         Humanoid = Humanoid,
-        Health = Humanoid.Health,
-        MaxHealth = Humanoid.MaxHealth,
+        Health = Health,
+        MaxHealth = MaxHealth,
         RigType = 0,
         Teamname = Player.Team.Name,
         Toolname = "Unknown",
@@ -175,6 +202,8 @@ function Module.Function:Update()
             local Key = tostring(Player)
             local Parts = Module.Function:GetBodyData(Player)
 
+            local Health, MaxHealth = Module.Function:GetHealth(Player)
+
             local PlayerInstance = Module.Function:GetPlayerInstance(Player)
             if is_team_check_active() and PlayerInstance and PlayerInstance.Team == LocalPlayer.Team then
                 continue
@@ -195,7 +224,7 @@ function Module.Function:Update()
                         Module.Added[ID] = Player
                     end
                 else
-                    edit_model_data({ Health = Humanoid.Health }, Key)
+                    edit_model_data({ Health = Health }, Key)
                 end
 
                 Seen[Key] = true
