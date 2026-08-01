@@ -27,7 +27,27 @@ local function CalculateCorners(Part)
     return Corners
 end
 
+local function ResolveParts(Input)
+    if typeof(Input) == "Instance" then
+        if Input:IsA("BasePart") then
+            return { Input }
+        end
+        
+        local Parts = {}
+        for _, Child in Input:GetChildren() do
+            if Child:IsA("BasePart") then
+                Parts[#Parts + 1] = Child
+            end
+        end
+        return Parts
+    end
+    
+    return Input
+end
+
 function AABB.GetBoundingBox(Parts)
+    Parts = ResolveParts(Parts)
+
     local MinX, MinY = math.huge, math.huge
     local MaxX, MaxY = -math.huge, -math.huge
     local OnScreen = false
@@ -46,7 +66,7 @@ function AABB.GetBoundingBox(Parts)
     end
 
     if not OnScreen then return nil end
-    
+
     return {
         Position = vector.create(MinX, MinY),
         Size = vector.create(MaxX - MinX, MaxY - MinY)
