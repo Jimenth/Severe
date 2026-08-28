@@ -1,76 +1,125 @@
---!optimize 2
+-- // Service and Module \\ --
+
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+
+local Camera = Workspace.CurrentCamera
+
 local Module = {
-    Functions = {},
-    Added = {},
-    Container = nil,
+    Function = {},
 
-    LocalPlayer = {
+    Stored = {
+        Containers = {
+            Players = nil,
+            Entities = nil,
+        },
+        Mode = nil,
         Closest = nil,
-        State = false,
+        State = nil,
         Excluded = nil,
-    },
-
-    Places = {
-        Openworld = { 3701546109 },
-        Zombies = { 4747446334 },
-        Combat = { 5480112241, 3826587512, 3826587512, 4524359706, 1054526971 },
+        Added = {},
     }
 }
 
-local Workspace = game:GetService("Workspace")
-local PlaceID = game.PlaceId
+function Module.Function:CheckMode()
+    if not Workspace then return nil end
 
-Module.Functions.IsPlace = function(Name)
-    for _, ID in ipairs(Module.Places[Name]) do
-        if PlaceID == ID then return true end
+    local Static = Workspace:FindFirstChild("Static")
+    local Unfinished = Workspace:FindFirstChild("!Unfinished")
+    local PvE = Workspace:FindFirstChild("PvE")
+    local Live = Workspace:FindFirstChild("Live")
+
+    if Static and Static.ClassName == "Folder" then
+        Module.Stored.Mode = "PVP"
+    elseif Unfinished and not PvE then
+        Module.Stored.Mode = "Zombies PVP"
+    elseif PvE then
+        Module.Stored.Mode = "Zombies PVE"
+    elseif Live then
+        Module.Stored.Mode = "Openworld"
     end
-    return false
+
+    return Module.Stored.Mode
 end
 
-Module.Functions.GetContainer = function()
-    if Module.Functions.IsPlace("Combat") then
-        Module.Container = Workspace
-        return Module.Container
+function Module.Function:GetContainer()
+    if not Workspace then return nil end
+
+    if not Module.Stored.Mode then
+        Module.Function:CheckMode()
     end
 
-    if Module.Container and Module.Container.Parent then return Module.Container end
+    local Mode = Module.Stored.Mode
 
-    for _, Object in ipairs(Workspace:GetChildren()) do
-        if Object:IsA("Model") and Object.Name == "Model" then
-            if Object:FindFirstChildOfClass("Model") and Object:FindFirstChildOfClass("Model").Name == "Male" then
-                Module.Container = Object
-                return Module.Container
+    local FirstModel = nil
+    for _, Child in Workspace:GetChildren() do
+        if Child.ClassName == "Model" and Child:FindFirstChild("Male") then
+            FirstModel = Child
+            break
+        end
+    end
+
+    if Mode == "Openworld" then
+        Module.Stored.Containers.Players = FirstModel
+        Module.Stored.Containers.Entities = FirstModel
+    elseif Mode == "Zombies PVP" or Mode == "Zombies PVE" then
+        Module.Stored.Containers.Players = FirstModel
+        Module.Stored.Containers.Entities = Workspace
+    elseif Mode == "PVP" then
+        Module.Stored.Containers.Players = FirstModel
+        Module.Stored.Containers.Entities = nil
+    else
+        Module.Stored.Containers.Players = nil
+        Module.Stored.Containers.Entities = nil
+    end
+
+    return Module.Stored.Containers
+end
+
+function Module.Function:EntityType(Entity)
+    if not Entity then return nil end
+
+    if not Module.Stored.Mode then
+        Module.Function:CheckMode()
+    end
+
+    local Mode = Module.Stored.Mode
+
+    if Mode == "PVP" then
+        if Entity.Name == "Male" then return "Player" end
+        return nil
+    end
+
+    if Mode == "Zombies PVE" or Mode == "Zombies PVP" then
+        if Entity.Name == "Zombie" then return "Zombie" end
+    end
+
+    if Mode == "Zombies PVE" or Mode == "Zombies PVP" or Mode == "Openworld" then
+        if Entity.Name == "Male" then
+            if Entity:FindFirstChildOfClass("BillboardGui") then
+                return "Player"
+            else
+                return "NPC"
             end
         end
     end
 
-    return Workspace
+    return nil
 end
 
-Module.Functions.IsPlayerModel = function(Model)
-    if Module.Functions.IsPlace("Combat") then
-        return Model.Name == "Male"
+function Module.Function:GetClosestPlayer()
+    if not Module.Stored.Containers.Players or not Module.Stored.Containers.Players.Parent then
+        Module.Function:GetContainer()
     end
-    return Model:FindFirstChild("BillboardGui") ~= nil
-end
 
-Module.Functions.IsZombieModel = function(Model)
-    return Model.Name == "Zombie"
-end
-
-Module.Functions.GetClosestPlayer = function()
-    if not Module.Container or not Module.Container.Parent then Module.Functions.GetContainer() end
-    
-    local Camera = Workspace:FindFirstChild("Camera")
-    if not Camera then return nil end
-
-    if Camera:FindFirstChild("WorldModel") then return nil end
+    local Container = Module.Stored.Containers.Players
+    if not Container then return nil end
 
     local ClosestModel = nil
     local ClosestDistance = math.huge
 
-    for _, Model in pairs(Module.Container:GetChildren()) do
-        if Model:IsA("Model") and Model.Name == "Male" and Module.Functions.IsPlace("Combat") or Module.Functions.IsPlayerModel(Model) then
+    for _, Model in Container:GetChildren() do
+        if Module.Function:EntityType(Model) == "Player" then
             local HumanoidRootPart = Model:FindFirstChild("Root")
             if HumanoidRootPart then
                 local Distance = vector.magnitude(HumanoidRootPart.Position - Camera.Position)
@@ -85,15 +134,12 @@ Module.Functions.GetClosestPlayer = function()
     return ClosestModel
 end
 
-Module.Functions.CheckWorldModel = function()
-    local Camera = Workspace:FindFirstChild("Camera")
+function Module.Function:CheckWorldModel()
     if not Camera then return false end
-    
-    local WorldModel = Camera:FindFirstChild("WorldModel")
-    return WorldModel ~= nil
+    return Camera:FindFirstChild("WorldModel") ~= nil
 end
 
-Module.Functions.GetBodyParts = function(Model)
+function Module.Function:GetBodyParts(Model)
     return {
         Head = Model:FindFirstChild("Head"),
         UpperTorso = Model:FindFirstChild("UpperTorso"),
@@ -119,11 +165,13 @@ Module.Functions.GetBodyParts = function(Model)
     }
 end
 
-Module.Functions.PlayerData = function(Model, Parts)
+function Module.Function:PlayerData(Model, Parts)
+    local Type = Module.Function:EntityType(Model)
+
     local Data = {
         Username = tostring(Model),
-        Displayname = Module.Functions.IsPlayerModel(Model) and "Player" or Module.Functions.IsZombieModel(Model) and "Zombie" or "AI",
-        Userid = Module.Functions.IsPlayerModel(Model) and 0 or -1,
+        Displayname = Type == "Player" and "Player" or Type == "Zombie" and "Zombie" or "AI",
+        Userid = Type == "Player" and 0 or -1,
         Character = Model,
         PrimaryPart = Parts.Head,
         Humanoid = Parts.Head,
@@ -149,10 +197,10 @@ Module.Functions.PlayerData = function(Model, Parts)
         RightFoot = Parts.RightFoot,
         BodyHeightScale = 1,
         RigType = 1,
-        Toolname = "None",
-        Teamname = Module.Functions.IsPlayerModel(Model) and "Players" or Module.Functions.IsZombieModel(Model) and "Zombies" or "NPCs",
+        Toolname = "Unknown",
+        Teamname = Type == "Player" and "Players" or Type == "Zombie" and "Zombies" or "NPCs",
         Whitelisted = false,
-        Archenemies = Module.Functions.IsPlayerModel(Model) and true or false,
+        Archenemies = Type == "Player" and true or false,
         Aimbot_Part = Parts.Head,
         Aimbot_TP_Part = Parts.Head,
         Triggerbot_Part = Parts.Head,
@@ -196,99 +244,62 @@ Module.Functions.PlayerData = function(Model, Parts)
     return tostring(Model), Data
 end
 
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        local New = Module.Functions.GetClosestPlayer()
-        
-        if Module.Functions.IsPlace("Openworld") then
-            Module.LocalPlayer.State = false
-            Module.LocalPlayer.Excluded = nil
-            Module.LocalPlayer.Closest = nil
-        elseif Module.Functions.IsPlace("Combat") then
-            Module.LocalPlayer.State = false
-            Module.LocalPlayer.Excluded = nil
-            Module.LocalPlayer.Closest = New
-        else
-            if Module.Functions.CheckWorldModel() then
-                Module.LocalPlayer.State = false
-                Module.LocalPlayer.Excluded = nil
-            else
-                Module.LocalPlayer.State = true
-                Module.LocalPlayer.Excluded = New
-            end
-            
-            Module.LocalPlayer.Closest = New
-        end
-    end
-end)
+function Module.Function:Update()
+    Module.Function:GetContainer()
 
-Module.Functions.Update = function()
-    Module.Functions.GetContainer()
-    if not Module.Container or not Module.Container.Parent then return end
+    local Mode = Module.Function:CheckMode()
+
+    local Containers = Module.Stored.Containers
+    if not Containers.Players and not Containers.Entities then return end
 
     local Seen = {}
 
     local function ProcessModel(Object)
         pcall(function()
-            if not Object then return end
+            if not (Object and Object:IsA("Model")) then return end
 
-            if Object:IsA("Model") and (Object.Name == "Male" or Object.Name == "Zombie" or Module.Functions.IsPlayerModel(Object)) then
-                local Key = tostring(Object)
-                if not Key then return end
+            local Type = Module.Function:EntityType(Object)
+            if not Type then return end
 
-                if Module.Functions.IsPlace("Openworld") and Object.Name == "Male" and Module.Functions.IsPlayerModel(Object) then
-                    return
-                end
+            if Mode == "Openworld" and Type == "Player" then return end
 
-                local Parts = Module.Functions.GetBodyParts(Object)
+            local Key = tostring(Object)
+            if Module.Stored.State and Object == Module.Stored.Excluded then return end
 
-                if Parts and Parts.Head and Parts.HumanoidRootPart then
-                    if Module.LocalPlayer.State and Module.LocalPlayer.Excluded and Object == Module.LocalPlayer.Excluded then
-                        if not Module.Functions.IsPlace("Zombies") or Module.Functions.IsPlayerModel(Object) then
-                            return
-                        end
-                    end
+            local Parts = Module.Function:GetBodyParts(Object)
+            if not (Parts and Parts.Head and Parts.HumanoidRootPart) then return end
 
-                    if not Module.Added[Key] then
-                        local Success2, ID, Data = pcall(function()
-                            return Module.Functions.PlayerData(Object, Parts)
-                        end)
+            Seen[Key] = true
 
-                        if Success2 and ID and Data then
-                            local Success3, Result = pcall(function()
-                                return add_model_data(Data, ID)
-                            end)
+            if not Module.Stored.Added[Key] then
+                local Success, ID, Data = pcall(function()
+                    return Module.Function:PlayerData(Object, Parts)
+                end)
 
-                            if Success3 and Result then
-                                Module.Added[ID] = Object
-                            end
-                        end
-                    end
-
-                    Seen[Key] = true
+                if Success and ID and Data and add_model_data(Data, Key) then
+                    Module.Stored.Added[Key] = Object
                 end
             end
         end)
     end
 
-    for _, Object in ipairs(Module.Container:GetChildren()) do
-        ProcessModel(Object)
-    end
-
-    if Module.Functions.IsPlace("Zombies") then
-        for _, Object in ipairs(Workspace:GetChildren()) do
-            if Object.Name == "Zombie" then
-                ProcessModel(Object)
-            end
+    if Containers.Players then
+        for _, Object in Containers.Players:GetChildren() do
+            ProcessModel(Object)
         end
     end
 
-    for Key, Model in pairs(Module.Added) do
+    if Containers.Entities and Containers.Entities ~= Containers.Players then
+        for _, Object in Containers.Entities:GetChildren() do
+            ProcessModel(Object)
+        end
+    end
+
+    for Key, Model in pairs(Module.Stored.Added) do
         pcall(function()
-            if not Model then
+            if not (Model and Model.Parent) then
                 remove_model_data(Key)
-                Module.Added[Key] = nil
+                Module.Stored.Added[Key] = nil
                 return
             end
 
@@ -296,126 +307,20 @@ Module.Functions.Update = function()
                 return Model:FindFirstChild("Root")
             end)
 
-            if not Success then HumanoidRootPart = nil end
-
-            if not HumanoidRootPart or not Seen[Key] then
+            if not Success or not HumanoidRootPart or not Seen[Key] then
                 remove_model_data(Key)
-                Module.Added[Key] = nil
+                Module.Stored.Added[Key] = nil
             end
         end)
     end
 end
 
-Module.Functions.LocalPlayerData = function()
-    local Camera = Workspace:FindFirstChild("Camera")
-    if not Camera then return end
-
-    if Module.Functions.IsPlace("Openworld") then
-        local Data = {
-            LocalPlayer = Camera,
-            Character = Camera,
-            Username = tostring(Camera),
-            Displayname = game.Players.LocalPlayer.Name,
-            Userid = 1,
-            Team = Camera,
-            Tool = Camera,
-            Humanoid = Camera,
-            Health = 100,
-            MaxHealth = 100,
-            RigType = 1,
-
-            Head = Camera,
-            RootPart = Camera,
-            LeftFoot = Camera,
-            LowerTorso = Camera,
-        }
-
-        override_local_data(Data)
-        return
-    end
-
-    if Module.LocalPlayer.Closest then
-        local Parts = Module.Functions.GetBodyParts(Module.LocalPlayer.Closest)
-        if Parts and Parts.Head and Parts.HumanoidRootPart then
-            local Data = {
-                LocalPlayer = Module.LocalPlayer.Closest,
-                Character = Module.LocalPlayer.Closest,
-                Username = tostring(Module.LocalPlayer.Closest),
-                Displayname = game.Players.LocalPlayer.Name,
-                Userid = 1,
-                Teamname = Module.Functions.IsPlayerModel(Module.LocalPlayer.Closest) and "Players" or Module.Functions.IsZombieModel(Module.LocalPlayer.Closest) and "Zombies" or "NPCs",
-                Toolname = "None",
-                Humanoid = Parts.Head,
-                Health = 100,
-                MaxHealth = 100,
-                RigType = 1,
-
-                RootPart = Parts.HumanoidRootPart,
-                Head = Parts.Head,
-                Torso = Parts.UpperTorso,
-                UpperTorso = Parts.UpperTorso,
-                LowerTorso = Parts.LowerTorso,
-                LeftArm = Parts.LeftUpperArm,
-                LeftLeg = Parts.LeftUpperLeg,
-                RightArm = Parts.RightUpperArm,
-                RightLeg = Parts.RightUpperLeg,
-                LeftUpperArm = Parts.LeftUpperArm,
-                LeftLowerArm = Parts.LeftLowerArm,
-                LeftHand = Parts.LeftHand,
-                RightUpperArm = Parts.RightUpperArm,
-                RightLowerArm = Parts.RightLowerArm,
-                RightHand = Parts.RightHand,
-                LeftUpperLeg = Parts.LeftUpperLeg,
-                LeftLowerLeg = Parts.LeftLowerLeg,
-                LeftFoot = Parts.LeftFoot,
-                RightUpperLeg = Parts.RightUpperLeg,
-                RightLowerLeg = Parts.RightLowerLeg,
-                RightFoot = Parts.RightFoot,
-                body_parts_data = {
-                    { name = "LowerTorso", part = Parts.LowerTorso },
-                    { name = "LeftUpperLeg", part = Parts.LeftUpperLeg },
-                    { name = "LeftLowerLeg", part = Parts.LeftLowerLeg },
-                    { name = "RightUpperLeg", part = Parts.RightUpperLeg },
-                    { name = "RightLowerLeg", part = Parts.RightLowerLeg },
-                    { name = "LeftUpperArm", part = Parts.LeftUpperArm },
-                    { name = "LeftLowerArm", part = Parts.LeftLowerArm },
-                    { name = "RightUpperArm", part = Parts.RightUpperArm },
-                    { name = "RightLowerArm", part = Parts.RightLowerArm },
-                },
-                full_body_data = {
-                    { name = "Head", part = Parts.Head },
-                    { name = "UpperTorso", part = Parts.UpperTorso },
-                    { name = "LowerTorso", part = Parts.LowerTorso },
-                    { name = "HumanoidRootPart", part = Parts.HumanoidRootPart },
-
-                    { name = "LeftUpperArm", part = Parts.LeftUpperArm },
-                    { name = "LeftLowerArm", part = Parts.LeftLowerArm },
-                    { name = "LeftHand", part = Parts.LeftHand },
-
-                    { name = "RightUpperArm", part = Parts.RightUpperArm },
-                    { name = "RightLowerArm", part = Parts.RightLowerArm },
-                    { name = "RightHand", part = Parts.RightHand },
-
-                    { name = "LeftUpperLeg", part = Parts.LeftUpperLeg },
-                    { name = "LeftLowerLeg", part = Parts.LeftLowerLeg },
-                    { name = "LeftFoot", part = Parts.LeftFoot },
-
-                    { name = "RightUpperLeg", part = Parts.RightUpperLeg },
-                    { name = "RightLowerLeg", part = Parts.RightLowerLeg },
-                    { name = "RightFoot", part = Parts.RightFoot },
-                }
-            }
-
-            override_local_data(Data)
-            return
-        end
-    end
-
-    local Data = {
+local function CameraProxyData()
+    return tostring(Camera), {
         LocalPlayer = Camera,
         Character = Camera,
         Username = tostring(Camera),
-        Displayname = game.Players.LocalPlayer.Name,
+        Displayname = Players.LocalPlayer.Name,
         Userid = 1,
         Team = Camera,
         Tool = Camera,
@@ -423,22 +328,79 @@ Module.Functions.LocalPlayerData = function()
         Health = 100,
         MaxHealth = 100,
         RigType = 1,
-
         Head = Camera,
         RootPart = Camera,
         LeftFoot = Camera,
         LowerTorso = Camera,
     }
+end
 
-    override_local_data(Data)
+function Module.Function:LocalPlayerData()
+    if not Camera then return nil end
+
+    if Module.Function:CheckMode() == "Openworld" then
+        return CameraProxyData()
+    end
+
+    if Module.Stored.Closest then
+        local Parts = Module.Function:GetBodyParts(Module.Stored.Closest)
+        if Parts and Parts.Head and Parts.HumanoidRootPart then
+            return tostring(Module.Stored.Closest), {
+                LocalPlayer = Module.Stored.Closest,
+                Character = Module.Stored.Closest,
+                Username = tostring(Module.Stored.Closest),
+                Displayname = Players.LocalPlayer.Name,
+                Userid = 1,
+                Team = Camera,
+                Tool = Camera,
+                Humanoid = Parts.Head,
+                Health = 100,
+                MaxHealth = 100,
+                RigType = 1,
+                Head = Parts.Head,
+                RootPart = Parts.HumanoidRootPart,
+                LeftFoot = Parts.LeftFoot,
+                LowerTorso = Parts.LowerTorso,
+            }
+        end
+    end
+
+    return CameraProxyData()
 end
 
 task.spawn(function()
     while true do
+        task.wait(0.5)
+        local New = Module.Function:GetClosestPlayer()
+        
+        if Module.Stored.Mode == "Openworld" then
+            Module.Stored.State = false
+            Module.Stored.Excluded = nil
+            Module.Stored.Closest = nil
+        elseif Module.Stored.Mode == "PVP" then
+            Module.Stored.State = false
+            Module.Stored.Excluded = nil
+            Module.Stored.Closest = New
+        else
+            if Module.Function:CheckWorldModel() then
+                Module.Stored.State = false
+                Module.Stored.Excluded = nil
+            else
+                Module.Stored.State = true
+                Module.Stored.Excluded = New
+            end
+            
+            Module.Stored.Closest = New
+        end
+    end
+end)
+
+task.spawn(function()
+    while true do
         task.wait(0.1)
-        Module.Functions.Update()
-    
-        local ID, Data = Module.Functions.LocalPlayerData()
+        Module.Function:Update()
+
+        local ID, Data = Module.Function:LocalPlayerData()
         if ID and Data then override_local_data(Data) end
     end
 end)
