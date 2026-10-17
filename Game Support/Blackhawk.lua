@@ -35,7 +35,7 @@ function Module.Function:CheckMode()
         Module.Stored.Mode = "Zombies PVP"
     elseif PvE then
         Module.Stored.Mode = "Zombies PVE"
-    elseif Live then
+    elseif game.PlaceId == 13622622708 or Live then
         Module.Stored.Mode = "Openworld"
     end
 
